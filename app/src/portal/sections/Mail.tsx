@@ -435,7 +435,7 @@ export default function Mail() {
       )}
 
       <div
-        className="g-mail"
+        className={"g-mail" + (selMail ? " mail-open" : "")}
         style={{
           height: "calc(100vh - 220px)",
           minHeight: 470,
@@ -691,6 +691,26 @@ export default function Mail() {
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
           {selMail ? (
             <>
+              <button
+                className="mail-back"
+                onClick={() => setSelectedMailId(null)}
+                style={{
+                  alignItems: "center",
+                  gap: 6,
+                  margin: "12px 16px 0",
+                  padding: "9px 14px",
+                  border: "1px solid rgba(12,15,13,0.12)",
+                  borderRadius: 10,
+                  background: "#fff",
+                  color: "#0C0F0D",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  alignSelf: "flex-start",
+                }}
+              >
+                ← 목록으로
+              </button>
               <div
                 style={{
                   padding: "20px 26px",

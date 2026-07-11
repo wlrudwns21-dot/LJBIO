@@ -124,3 +124,4 @@ a {
 .modalbox {
   animation: pop 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+.mail-back { display: none; }
