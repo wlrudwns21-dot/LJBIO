@@ -7,6 +7,23 @@
 }
 
 @media (max-width: 860px) {
+  /* login / signup screen → single column, slim brand header */
+  .login-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .login-brand {
+    padding: 16px 20px !important;
+    min-height: auto !important;
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+  .login-brand-body,
+  .login-brand-foot {
+    display: none !important;
+  }
+  .login-grid > div:last-child {
+    padding: 30px 20px !important;
+  }
   .app-sidebar {
     position: fixed !important;
     left: 0;
