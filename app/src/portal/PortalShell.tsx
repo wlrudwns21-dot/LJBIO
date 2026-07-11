@@ -42,6 +42,9 @@ export default function PortalShell() {
     init: "지",
   };
   const meInit = me.init || me.name.charAt(0);
+  const isManagerUp = me.role === "admin" || me.role === "manager";
+  // 파일 관리는 팀장급 이상만 접근 (일반 직원에게는 숨김)
+  const navSections = SECTIONS.filter((s) => s.key !== "files" || isManagerUp);
 
   const active = useMemo(
     () => SECTIONS.find((s) => s.key === section) || SECTIONS[0],
@@ -89,7 +92,7 @@ export default function PortalShell() {
           </div>
         </div>
         <nav style={{ flex: 1, overflowY: "auto", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 3 }}>
-          {SECTIONS.map((s) => {
+          {navSections.map((s) => {
             const on = s.key === section;
             const badge = s.badge ? badges[s.badge] || 0 : 0;
             return (

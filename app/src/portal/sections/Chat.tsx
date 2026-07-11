@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "../ui";
 import { demoConversations } from "../data/demo";
 import type { Conversation } from "@/types/database";
 
@@ -28,6 +29,7 @@ const cloneDemo = (): Conv[] =>
 
 export default function Chat() {
   const { profile } = useAuth();
+  const flash = useToast();
   const [convs, setConvs] = useState<Conv[]>(cloneDemo);
   const [activeId, setActiveId] = useState<string>(demoConversations[0]?.id ?? "");
   const [draft, setDraft] = useState("");
@@ -85,6 +87,21 @@ export default function Chat() {
   function openConv(id: string) {
     setConvs((prev) => prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)));
     setActiveId(id);
+  }
+
+  function deleteConv(id: string) {
+    const target = convs.find((c) => c.id === id);
+    if (!target) return;
+    if (!window.confirm(`'${target.name}' 채팅방을 삭제할까요? 대화 내용도 함께 삭제됩니다.`))
+      return;
+    const rest = convs.filter((c) => c.id !== id);
+    setConvs(rest);
+    setActiveId((cur) => (cur === id ? rest[0]?.id ?? "" : cur));
+    if (isSupabaseConfigured) {
+      // messages are removed via ON DELETE CASCADE
+      supabase.from("conversations").delete().eq("id", id).then(() => {});
+    }
+    flash("채팅방을 삭제했습니다");
   }
 
   async function send() {
@@ -206,6 +223,27 @@ export default function Chat() {
             <div style={{ fontSize: 15, fontWeight: 700 }}>{active?.name}</div>
             <div style={{ fontSize: 12, color: "#46D08A", fontWeight: 500 }}>{activeStatus}</div>
           </div>
+          <div style={{ flex: 1 }} />
+          {active && (
+            <button
+              onClick={() => deleteConv(active.id)}
+              className="gbtn"
+              title="채팅방 삭제"
+              style={{
+                padding: "8px 13px",
+                border: "1px solid rgba(196,85,62,0.3)",
+                borderRadius: 9,
+                background: "#fff",
+                color: "#C4553E",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              🗑 삭제
+            </button>
+          )}
         </div>
 
         <div

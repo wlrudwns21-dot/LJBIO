@@ -1,5 +1,14 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useToast } from "../ui";
+import { demoContractTypes } from "../data/demo";
+
+type CtTemplate = {
+  id?: string;
+  name: string;
+  template_url?: string | null;
+  template_name?: string | null;
+};
 
 type DocType = "PL" | "CI" | "EX" | "INV" | "CT";
 type Mode = "packing" | "money" | "contract";
@@ -127,6 +136,30 @@ export default function Docs() {
     { title: "제4조", content: "대금 지급 — T/T 30% 선급, 잔금 선적 전 결제" },
   ]);
 
+  // Contract templates (uploaded in 관리자 → 계약서 유형·양식 관리)
+  const [ctList, setCtList] = useState<CtTemplate[]>(
+    demoContractTypes.map((name) => ({ name })),
+  );
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("contract_types")
+      .select("*")
+      .order("sort", { ascending: true })
+      .then(({ data }) => data && setCtList(data as CtTemplate[]));
+  }, []);
+
+  function downloadTemplate(c: CtTemplate) {
+    if (!c.template_url) return;
+    const a = document.createElement("a");
+    a.href = c.template_url;
+    a.download = c.template_name || c.name + "_계약서";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    flash(c.name + " 계약서를 다운로드합니다");
+  }
+
   const dm = DOC_META[docType];
   const contract = dm.mode === "contract";
   const money = dm.mode === "money";
@@ -190,6 +223,121 @@ export default function Docs() {
   const updClause = (idx: number, field: keyof Clause, value: string) =>
     setDocClauses((cs) => cs.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
 
+  const typeSelector = (
+    <div style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 16, padding: 18 }}>
+      <h4 style={{ fontSize: 13, fontWeight: 700, color: "#84908A", letterSpacing: "0.02em", marginBottom: 12 }}>
+        문서 종류
+      </h4>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {DOC_TYPES.map((d) => {
+          const on = docType === d.k;
+          return (
+            <button
+              key={d.k}
+              onClick={() => setDocType(d.k)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 11,
+                width: "100%",
+                padding: "11px 13px",
+                borderRadius: 10,
+                border: `1px solid ${on ? "rgba(14,123,78,0.4)" : "transparent"}`,
+                background: on ? "rgba(14,123,78,0.08)" : "transparent",
+                color: on ? "#0E7B4E" : "#3A3C45",
+                fontSize: 13.5,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <span style={{ fontSize: 16 }}>{d.icon}</span>
+              <span style={{ flex: 1, textAlign: "left" }}>{d.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // 계약서: 유형 선택 → 업로드된 양식 다운로드
+  if (contract) {
+    return (
+      <div
+        className="fade g-docs"
+        style={{
+          maxWidth: 1240,
+          margin: "0 auto",
+          display: "grid",
+          gridTemplateColumns: "300px 1fr",
+          gap: 20,
+          alignItems: "start",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>{typeSelector}</div>
+        <div style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 16, padding: 24 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700 }}>계약서 양식 다운로드</h3>
+          <p style={{ fontSize: 13, color: "#84908A", marginTop: 6, lineHeight: 1.6 }}>
+            계약서 유형을 선택해 양식 파일을 다운로드하세요. 양식은{" "}
+            <b>관리자 → 계약서 유형·양식 관리</b>에서 업로드합니다.
+          </p>
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+            {ctList.map((c, i) => (
+              <div
+                key={c.id || i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  padding: "14px 16px",
+                  border: "1px solid rgba(12,15,13,0.09)",
+                  borderRadius: 12,
+                  background: "#FAFBFA",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontSize: 18 }}>✍</span>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
+                  <div style={{ fontSize: 11.5, color: "#84908A", marginTop: 2 }}>
+                    {c.template_url ? "📄 " + (c.template_name || "양식 파일") : "양식 미등록"}
+                  </div>
+                </div>
+                {c.template_url ? (
+                  <button
+                    onClick={() => downloadTemplate(c)}
+                    className="pbtn"
+                    style={{
+                      padding: "10px 18px",
+                      border: "none",
+                      borderRadius: 9,
+                      background: "linear-gradient(110deg,#0E7B4E,#46D08A)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ⭳ 다운로드
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#9AA29C", whiteSpace: "nowrap" }}>
+                    관리자 메뉴에서 업로드 필요
+                  </span>
+                )}
+              </div>
+            ))}
+            {ctList.length === 0 && (
+              <div style={{ padding: "36px 16px", textAlign: "center", color: "#9AA29C", fontSize: 13 }}>
+                등록된 계약서 유형이 없습니다. 관리자 메뉴에서 추가하세요.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="fade g-docs"
@@ -204,40 +352,7 @@ export default function Docs() {
     >
       {/* LEFT COLUMN */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Document types */}
-        <div style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 16, padding: 18 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 700, color: "#84908A", letterSpacing: "0.02em", marginBottom: 12 }}>
-            문서 종류
-          </h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {DOC_TYPES.map((d) => {
-              const on = docType === d.k;
-              return (
-                <button
-                  key={d.k}
-                  onClick={() => setDocType(d.k)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 11,
-                    width: "100%",
-                    padding: "11px 13px",
-                    borderRadius: 10,
-                    border: `1px solid ${on ? "rgba(14,123,78,0.4)" : "transparent"}`,
-                    background: on ? "rgba(14,123,78,0.08)" : "transparent",
-                    color: on ? "#0E7B4E" : "#3A3C45",
-                    fontSize: 13.5,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ fontSize: 16 }}>{d.icon}</span>
-                  <span style={{ flex: 1, textAlign: "left" }}>{d.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {typeSelector}
 
         {/* 발행 정보 */}
         <div style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 16, padding: 18 }}>

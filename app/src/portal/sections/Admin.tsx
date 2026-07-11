@@ -20,7 +20,12 @@ type MemberRow = {
   init: string | null;
   avatar_bg: string;
 };
-type CtRow = { id: string; name: string };
+type CtRow = {
+  id: string;
+  name: string;
+  template_url?: string | null;
+  template_name?: string | null;
+};
 
 const PALETTE = theme.palette;
 
@@ -108,6 +113,15 @@ export default function Admin() {
     flash(p.name + " 신청을 거절했습니다");
   }
 
+  /* ------------------------------------------------------------ members */
+  function deleteMember(m: MemberRow) {
+    if (!window.confirm(`'${m.name}' 직원 계정을 삭제할까요? 되돌릴 수 없습니다.`))
+      return;
+    setMembers((list) => list.filter((x) => (x.id || x.email) !== (m.id || m.email)));
+    if (m.id) void persist(() => supabase.from("profiles").delete().eq("id", m.id!));
+    flash(m.name + " 계정을 삭제했습니다");
+  }
+
   /* --------------------------------------------------------- segments */
   function addSegment() {
     const id = "seg" + Date.now();
@@ -175,6 +189,40 @@ export default function Admin() {
     setContractTypes((c) => c.filter((x) => x.id !== id));
     void persist(() => supabase.from("contract_types").delete().eq("id", id));
     flash("계약서 유형을 삭제했습니다");
+  }
+  function onCtTemplate(id: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const url = String(r.result);
+      setContractTypes((c) =>
+        c.map((x) =>
+          x.id === id ? { ...x, template_url: url, template_name: file.name } : x,
+        ),
+      );
+      void persist(() =>
+        supabase
+          .from("contract_types")
+          .update({ template_url: url, template_name: file.name })
+          .eq("id", id),
+      );
+      flash("계약서 양식을 업로드했습니다");
+    };
+    r.readAsDataURL(file);
+    e.target.value = "";
+  }
+  function clearCtTemplate(id: string) {
+    setContractTypes((c) =>
+      c.map((x) => (x.id === id ? { ...x, template_url: null, template_name: null } : x)),
+    );
+    void persist(() =>
+      supabase
+        .from("contract_types")
+        .update({ template_url: null, template_name: null })
+        .eq("id", id),
+    );
+    flash("업로드한 양식을 삭제했습니다");
   }
 
   /* ------------------------------------------------------------- seal */
@@ -454,9 +502,34 @@ export default function Admin() {
                 </span>
               </span>
               <span
-                style={{ fontSize: 12.5, color: "#0E7B4E", fontWeight: 600 }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
               >
-                ● 활성
+                <span style={{ fontSize: 12.5, color: "#0E7B4E", fontWeight: 600 }}>
+                  ● 활성
+                </span>
+                <button
+                  onClick={() => deleteMember(m)}
+                  className="gbtn"
+                  title="직원 삭제"
+                  style={{
+                    padding: "6px 10px",
+                    border: "1px solid rgba(196,85,62,0.3)",
+                    borderRadius: 8,
+                    background: "#fff",
+                    color: "#C4553E",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  삭제
+                </button>
               </span>
             </div>
           );
@@ -600,9 +673,10 @@ export default function Admin() {
             borderBottom: "1px solid rgba(12,15,13,0.07)",
           }}
         >
-          <h3 style={{ fontSize: 16, fontWeight: 700 }}>계약서 유형 관리</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700 }}>계약서 유형 · 양식 관리</h3>
           <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 2 }}>
-            거래처 등록 시 선택하는 계약서 유형 목록입니다 · 직접 추가·수정·삭제
+            유형을 추가·수정·삭제하고, 유형별 <b>계약서 양식 파일</b>을 업로드하세요.
+            업로드한 파일은 <b>문서 생성 → 계약서</b>에서 선택해 다운로드됩니다.
           </div>
         </div>
         <div
@@ -651,9 +725,10 @@ export default function Admin() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 14,
+              gap: 12,
               padding: "13px 22px",
               borderTop: "1px solid rgba(12,15,13,0.06)",
+              flexWrap: "wrap",
             }}
           >
             <span style={{ fontSize: 16 }}>✍</span>
@@ -663,6 +738,7 @@ export default function Admin() {
               onChange={(e) => updContractType(c.id, e.target.value)}
               style={{
                 flex: 1,
+                minWidth: 160,
                 padding: "9px 12px",
                 border: "1.5px solid rgba(12,15,13,0.12)",
                 borderRadius: 9,
@@ -670,6 +746,63 @@ export default function Admin() {
                 fontWeight: 600,
               }}
             />
+            {c.template_url ? (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "#256F4C",
+                  background: "rgba(14,123,78,0.08)",
+                  border: "1px solid rgba(14,123,78,0.25)",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  maxWidth: 220,
+                }}
+              >
+                <span
+                  style={{
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  📄 {c.template_name || "양식"}
+                </span>
+                <span
+                  onClick={() => clearCtTemplate(c.id)}
+                  title="양식 삭제"
+                  style={{ cursor: "pointer", color: "#C4553E", fontWeight: 700 }}
+                >
+                  ×
+                </span>
+              </span>
+            ) : null}
+            <label
+              className="gbtn"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "7px 12px",
+                border: "1px solid rgba(14,123,78,0.4)",
+                borderRadius: 8,
+                background: "#fff",
+                color: "#0E7B4E",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {c.template_url ? "양식 교체" : "양식 업로드"}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.hwp,.hwpx,image/*"
+                onChange={(e) => onCtTemplate(c.id, e)}
+                style={{ display: "none" }}
+              />
+            </label>
             <button
               onClick={() => removeContractType(c.id)}
               className="gbtn"

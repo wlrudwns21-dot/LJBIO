@@ -152,14 +152,8 @@ export const demoMails: Mail[] = [
   { id: "6", owner_id: null, folder: "drafts", from_name: "지경준", from_email: "kyungjun.ji@bio-lj.com", from_init: "지", avatar_bg: "#0E7B4E", to_addr: "", subject: "8월 수출 일정 공유 (작성 중)", preview: "초안 작성 중…", body: "", unread: false, starred: false, attachments: [], sent_at: "2026-07-11T10:30:00" },
 ];
 
-export const demoApprovals: Approval[] = [
-  { id: "1", seq: 1, type: "지출", title: "상하이 보세창고 임대료 3분기 지출 결의", seg_id: "pharmexp", drafter: "최민수", drafter_id: null, d_init: "최", d_bg: "#7A4DD1", amount: "₩ 18,500,000", due: "2026-07-15", content: "상하이 보세창고 3분기(7~9월) 임대료 지출 결의 건입니다. 임대차 계약서 및 세금계산서를 첨부하였으며, 기한 내 송금이 필요합니다.", status: "pending", approver: null, approved_at: null, created_at: "2026-07-09" },
-  { id: "2", seq: 2, type: "구매", title: "히알루론산 원료 5,000L 구매 발주 요청", seg_id: "cosmexp", drafter: "한소희", drafter_id: null, d_init: "한", d_bg: "#D14D8B", amount: "₩ 62,000,000", due: "2026-07-13", content: "화장품 수출 물량 대응을 위한 원료 발주 건입니다. 공급사 3곳 견적 비교 완료하였고, 최저가 공급사(대한바이오켐)로 발주 요청드립니다.", status: "pending", approver: null, approved_at: null, created_at: "2026-07-08" },
-  { id: "3", seq: 3, type: "계약", title: "방콕 MediTrade 독점 공급 계약 체결 요청", seg_id: "pharmexp", drafter: "김서연", drafter_id: null, d_init: "김", d_bg: "#2A6FDB", amount: "—", due: "2026-07-18", content: "태국 필러 제품 독점 공급 계약 건입니다. 법무 검토 완료본을 첨부하였으며, 계약 기간 1년(자동갱신) 조건입니다.", status: "pending", approver: null, approved_at: null, created_at: "2026-07-07" },
-  { id: "4", seq: 4, type: "수출서류", title: "태국 필러 5,000ea PL / CI 최종 승인 요청", seg_id: "cosmexp", drafter: "정우성", drafter_id: null, d_init: "정", d_bg: "#C6803A", amount: "USD 135,000", due: "2026-07-14", content: "7/14 선적분 Packing List 및 Commercial Invoice 최종 승인 요청입니다. CIF 기준 단가로 통일하였습니다.", status: "approved", approver: "이일형", approved_at: "2026-07-10", created_at: "2026-07-09" },
-  { id: "5", seq: 5, type: "지출", title: "6월 중국 출장비 정산 결의", seg_id: "deviceexp", drafter: "박지원", drafter_id: null, d_init: "박", d_bg: "#0E7B4E", amount: "₩ 4,320,000", due: "2026-07-08", content: "중국 NMPA 현지 실사 출장(6/24~6/27) 경비 정산 결의 건입니다. 항공·숙박·현지 교통비 영수증 첨부.", status: "approved", approver: "이일형", approved_at: "2026-07-06", created_at: "2026-07-05" },
-  { id: "6", seq: 6, type: "구매", title: "유통 ERP 서버 라이선스 갱신 발주", seg_id: "itconsult", drafter: "지경준", drafter_id: null, d_init: "지", d_bg: "#0E7B4E", amount: "₩ 9,800,000", due: "2026-07-20", content: "사내 유통 ERP 연간 서버 라이선스 갱신 발주 건입니다.", status: "rejected", approver: "이일형", approved_at: "2026-07-10", created_at: "2026-07-10" },
-];
+// 전자결재 시드 데이터는 제거되었습니다 (임시 데이터). 상신하면 채워집니다.
+export const demoApprovals: Approval[] = [];
 
 export const demoPartners: Partner[] = [
   { id: "1", name: "Bangkok MediTrade Co., Ltd.", rep: "Somchai Prasert", biz_no: "0105-556-7788", biz_type: "도소매", biz_item: "의료기기 · 화장품", address: "128 Silom Rd, Bang Rak, Bangkok, Thailand", phone: "+66-2-123-4567", contact_name: "김서연", contact_email: "seoyeon.kim@bio-lj.com", deal_type: "매출", seg_id: "cosmexp", contract_type: "독점 판매계약서", memo: "태국 필러 독점 유통 파트너.", docs: { bizReg: { name: "BKK_MediTrade_사업자등록증.pdf" }, bankbook: null, contract: { name: "독점공급계약서_최종.pdf" } }, created_at: "2026-06-20" },

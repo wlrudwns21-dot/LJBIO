@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "../ui";
 import { demoFiles, demoSegments, demoMe } from "../data/demo";
 import type { FileRow, Segment } from "@/types/database";
@@ -30,6 +31,9 @@ function catStyle(c: string) {
 
 export default function Files() {
   const flash = useToast();
+  const { profile } = useAuth();
+  const role = profile?.role ?? "admin"; // demo mode → admin
+  const canAccess = role === "admin" || role === "manager";
   const [files, setFiles] = useState<FileRow[]>(demoFiles);
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
   const [segFilter, setSegFilter] = useState<string>("전체");
@@ -93,6 +97,31 @@ export default function Files() {
   }
 
   const gridCols = "1fr 132px 100px 72px 90px 104px 34px";
+
+  if (!canAccess) {
+    return (
+      <div
+        className="fade"
+        style={{
+          maxWidth: 560,
+          margin: "60px auto 0",
+          textAlign: "center",
+          background: "#fff",
+          border: "1px solid rgba(12,15,13,0.07)",
+          borderRadius: 18,
+          padding: "48px 32px",
+        }}
+      >
+        <div style={{ fontSize: 40 }}>🔒</div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>접근 권한이 없습니다</h3>
+        <p style={{ fontSize: 14, color: "#84908A", marginTop: 10, lineHeight: 1.6 }}>
+          파일 관리는 <b>팀장급 이상</b>만 이용할 수 있습니다.
+          <br />
+          권한이 필요하면 관리자에게 문의하세요.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="fade" style={{ maxWidth: 1160, margin: "0 auto" }}>

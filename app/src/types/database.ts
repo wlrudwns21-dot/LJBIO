@@ -140,6 +140,9 @@ export interface ContractType {
   id: string;
   name: string;
   sort: number;
+  /** Uploaded template file (stored as a base64 data URL) + its filename. */
+  template_url?: string | null;
+  template_name?: string | null;
 }
 
 export interface PartnerDocs {
