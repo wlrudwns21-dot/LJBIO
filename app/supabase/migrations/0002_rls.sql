@@ -113,7 +113,7 @@ declare t text;
 begin
   foreach t in array array[
     'notices', 'tasks', 'task_stages', 'task_comments',
-    'conversations', 'messages', 'files', 'calendar_events'
+    'conversations', 'messages', 'calendar_events'
   ] loop
     execute format('create policy %I_select on public.%I for select using (public.is_approved());', t, t);
     execute format('create policy %I_insert on public.%I for insert with check (public.is_approved());', t, t);
@@ -132,6 +132,12 @@ begin
   end loop;
 end $$;
 
+-- --- files (파일 관리): manager+ only (staff excluded) -----------------------
+create policy files_select on public.files for select using (public.is_manager_up());
+create policy files_insert on public.files for insert with check (public.is_manager_up());
+create policy files_update on public.files for update using (public.is_manager_up());
+create policy files_delete on public.files for delete using (public.is_manager_up());
+
 -- --- partners / leaves: read approved, create approved, decide manager+ ------
 create policy partners_select on public.partners for select using (public.is_approved());
 create policy partners_write  on public.partners for all using (public.is_approved()) with check (public.is_approved());
@@ -146,10 +152,18 @@ create policy approvals_select on public.approvals
   for select using (public.is_admin() or drafter_id = (select id from public.profiles where user_id = auth.uid()));
 create policy approvals_insert on public.approvals
   for insert with check (public.is_approved());
-create policy approvals_update on public.approvals
-  for update using (
-    public.is_admin()
-    or drafter_id = (select id from public.profiles where user_id = auth.uid())
+-- 승인/반려(상태 변경)는 관리자만. 상신자는 '대기' 상태에서 내용만 수정 가능.
+create policy approvals_update_admin on public.approvals
+  for update using (public.is_admin()) with check (public.is_admin());
+create policy approvals_update_drafter on public.approvals
+  for update
+  using (
+    status = 'pending'
+    and drafter_id = (select id from public.profiles where user_id = auth.uid())
+  )
+  with check (
+    status = 'pending'
+    and drafter_id = (select id from public.profiles where user_id = auth.uid())
   );
 create policy approvals_delete on public.approvals
   for delete using (public.is_admin());

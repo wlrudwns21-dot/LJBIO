@@ -154,9 +154,11 @@ create table if not exists public.approvals (
 -- partners (거래처) + contract types
 -- ---------------------------------------------------------------------------
 create table if not exists public.contract_types (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  sort        int not null default 0
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  sort          int not null default 0,
+  template_url  text,   -- uploaded contract-form file (base64 data URL)
+  template_name text
 );
 
 create table if not exists public.partners (
@@ -353,7 +355,7 @@ declare t text;
 begin
   foreach t in array array[
     'notices', 'tasks', 'task_stages', 'task_comments',
-    'conversations', 'messages', 'files', 'calendar_events'
+    'conversations', 'messages', 'calendar_events'
   ] loop
     execute format('create policy %I_select on public.%I for select using (public.is_approved());', t, t);
     execute format('create policy %I_insert on public.%I for insert with check (public.is_approved());', t, t);
@@ -372,6 +374,12 @@ begin
   end loop;
 end $$;
 
+-- --- files (파일 관리): manager+ only (staff excluded) -----------------------
+create policy files_select on public.files for select using (public.is_manager_up());
+create policy files_insert on public.files for insert with check (public.is_manager_up());
+create policy files_update on public.files for update using (public.is_manager_up());
+create policy files_delete on public.files for delete using (public.is_manager_up());
+
 -- --- partners / leaves: read approved, create approved, decide manager+ ------
 create policy partners_select on public.partners for select using (public.is_approved());
 create policy partners_write  on public.partners for all using (public.is_approved()) with check (public.is_approved());
@@ -386,10 +394,18 @@ create policy approvals_select on public.approvals
   for select using (public.is_admin() or drafter_id = (select id from public.profiles where user_id = auth.uid()));
 create policy approvals_insert on public.approvals
   for insert with check (public.is_approved());
-create policy approvals_update on public.approvals
-  for update using (
-    public.is_admin()
-    or drafter_id = (select id from public.profiles where user_id = auth.uid())
+-- 승인/반려(상태 변경)는 관리자만. 상신자는 '대기' 상태에서 내용만 수정 가능.
+create policy approvals_update_admin on public.approvals
+  for update using (public.is_admin()) with check (public.is_admin());
+create policy approvals_update_drafter on public.approvals
+  for update
+  using (
+    status = 'pending'
+    and drafter_id = (select id from public.profiles where user_id = auth.uid())
+  )
+  with check (
+    status = 'pending'
+    and drafter_id = (select id from public.profiles where user_id = auth.uid())
   );
 create policy approvals_delete on public.approvals
   for delete using (public.is_admin());
@@ -535,19 +551,7 @@ from public.profiles p join (values
 ) as x(folder, from_name, from_email, from_init, av_bg, to_addr, subject, preview, body, unread, starred, attachments, sent_at)
   on p.email = 'kyungjun.ji@bio-lj.com';
 
--- --- approvals (전자결재) -----------------------------------------------------
-insert into public.approvals (type, title, seg_id, drafter, drafter_id, d_init, d_bg, amount, due, content, status, approver, approved_at, created_at)
-select x.type, x.title, x.seg_id, x.drafter,
-       (select id from public.profiles where name = x.drafter limit 1),
-       x.d_init, x.d_bg, x.amount, x.due::date, x.content, x.status, x.approver, x.approved_at::date, x.created_at::date
-from (values
-  ('지출',     '상하이 보세창고 임대료 3분기 지출 결의',   'pharmexp', '최민수', '최', '#7A4DD1', '₩ 18,500,000', '2026-07-15', '상하이 보세창고 3분기(7~9월) 임대료 지출 결의 건입니다. 임대차 계약서 및 세금계산서를 첨부하였으며, 기한 내 송금이 필요합니다.', 'pending', null, null, '2026-07-09'),
-  ('구매',     '히알루론산 원료 5,000L 구매 발주 요청',     'cosmexp',  '한소희', '한', '#D14D8B', '₩ 62,000,000', '2026-07-13', '화장품 수출 물량 대응을 위한 원료 발주 건입니다. 공급사 3곳 견적 비교 완료하였고, 최저가 공급사(대한바이오켐)로 발주 요청드립니다.', 'pending', null, null, '2026-07-08'),
-  ('계약',     '방콕 MediTrade 독점 공급 계약 체결 요청',   'pharmexp', '김서연', '김', '#2A6FDB', '—',            '2026-07-18', '태국 필러 제품 독점 공급 계약 건입니다. 법무 검토 완료본을 첨부하였으며, 계약 기간 1년(자동갱신) 조건입니다.', 'pending', null, null, '2026-07-07'),
-  ('수출서류', '태국 필러 5,000ea PL / CI 최종 승인 요청',  'cosmexp',  '정우성', '정', '#C6803A', 'USD 135,000',  '2026-07-14', '7/14 선적분 Packing List 및 Commercial Invoice 최종 승인 요청입니다. CIF 기준 단가로 통일하였습니다.', 'approved', '이일형', '2026-07-10', '2026-07-09'),
-  ('지출',     '6월 중국 출장비 정산 결의',                 'deviceexp','박지원', '박', '#0E7B4E', '₩ 4,320,000',  '2026-07-08', '중국 NMPA 현지 실사 출장(6/24~6/27) 경비 정산 결의 건입니다. 항공·숙박·현지 교통비 영수증 첨부.', 'approved', '이일형', '2026-07-06', '2026-07-05'),
-  ('구매',     '유통 ERP 서버 라이선스 갱신 발주',          'itconsult','지경준', '지', '#0E7B4E', '₩ 9,800,000',  '2026-07-20', '사내 유통 ERP 연간 서버 라이선스 갱신 발주 건입니다.', 'rejected', '이일형', '2026-07-10', '2026-07-10')
-) as x(type, title, seg_id, drafter, d_init, d_bg, amount, due, content, status, approver, approved_at, created_at);
+-- --- approvals (전자결재): 시드 없음 (실제 상신 데이터로 채워집니다) ----------
 
 -- --- partners (거래처) --------------------------------------------------------
 insert into public.partners (name, rep, biz_no, biz_type, biz_item, address, phone, contact_name, contact_email, deal_type, seg_id, contract_type, memo, docs, created_at) values

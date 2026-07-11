@@ -151,7 +151,7 @@ export default function Chat() {
       }}
     >
       {/* conversation list */}
-      <div style={{ borderRight: "1px solid rgba(12,15,13,0.08)", display: "flex", flexDirection: "column" }}>
+      <div style={{ borderRight: "1px solid rgba(12,15,13,0.08)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "18px 18px 12px" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700 }}>메시지</h3>
           <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, background: "rgba(12,15,13,0.05)", borderRadius: 9, padding: "8px 11px" }}>
@@ -159,7 +159,7 @@ export default function Chat() {
             <input placeholder="직원 검색…" style={{ border: "none", background: "transparent", outline: "none", fontSize: 13, width: "100%" }} />
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 12px" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 8px 12px" }}>
           {convs.map((d) => {
             const lastMsg = d.messages[d.messages.length - 1];
             const preview =
@@ -214,7 +214,7 @@ export default function Chat() {
       </div>
 
       {/* active conversation */}
-      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <div style={{ padding: "15px 22px", borderBottom: "1px solid rgba(12,15,13,0.08)", display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 38, height: 38, borderRadius: "50%", background: active?.avatar_bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>
             {active?.init}
@@ -249,7 +249,7 @@ export default function Chat() {
         <div
           id="chatScroll"
           ref={scrollRef}
-          style={{ flex: 1, overflowY: "auto", padding: 24, background: "#F6F8F6", display: "flex", flexDirection: "column", gap: 12 }}
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 24, background: "#F6F8F6", display: "flex", flexDirection: "column", gap: 12 }}
         >
           {active?.messages.map((m, i) => {
             const showSender = isGroup && !m.me;

@@ -195,6 +195,18 @@ export interface Leave {
   created_at: string;
 }
 
+export interface Inquiry {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  type: string;
+  message: string;
+  status: "new" | "read" | "replied" | "archived";
+  created_at: string;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;

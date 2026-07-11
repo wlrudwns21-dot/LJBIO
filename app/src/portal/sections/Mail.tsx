@@ -14,8 +14,10 @@ import {
   setStar,
   trash,
   sendMessage,
+  downloadAttachment,
   isTokenExpired,
   type GmailToken,
+  type GmailAttachment,
 } from "@/lib/gmail";
 
 const FOLDER_DEFS: [MailRow["folder"] | "starred", string][] = [
@@ -42,16 +44,23 @@ type MailItem = {
   body: string;
   unread: boolean;
   starred: boolean;
-  attachments: { name: string }[];
+  attachments: GmailAttachment[];
   sent_at: string;
   owner_id?: string | null;
 };
 
 export default function Mail() {
   const flash = useToast();
-  const { profile } = useAuth();
-  const [gmail, setGmail] = useState<GmailToken | null>(() => getGmailToken());
+  const { profile, session } = useAuth();
+  const uid = session?.user?.id;
+  const [gmail, setGmail] = useState<GmailToken | null>(() => getGmailToken(uid));
   const connected = !!gmail;
+
+  // Re-check the token whenever the logged-in user changes (prevents one user
+  // from seeing another's connected mailbox on a shared browser).
+  useEffect(() => {
+    setGmail(getGmailToken(uid));
+  }, [uid]);
 
   const [mails, setMails] = useState<MailItem[]>(demoMails as MailItem[]);
   const [mailFolder, setMailFolder] = useState<string>("inbox");
@@ -130,6 +139,24 @@ export default function Mail() {
         if (isTokenExpired(e)) setGmail(null);
       })
       .finally(() => setLoading(false));
+  }
+
+  async function onAttachment(messageId: string, att: GmailAttachment) {
+    if (!connected || !gmail || !att.attachmentId) {
+      flash("첨부파일은 Gmail 연결 후 다운로드할 수 있습니다.");
+      return;
+    }
+    try {
+      flash("첨부파일을 불러오는 중…");
+      await downloadAttachment(gmail.token, messageId, att);
+    } catch (e) {
+      if (isTokenExpired(e)) {
+        setGmail(null);
+        flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+      } else {
+        flash("첨부파일을 불러오지 못했습니다.");
+      }
+    }
   }
 
   const mailDate = (m: MailItem) => (m.sent_at || "").slice(0, 10);
@@ -399,6 +426,7 @@ export default function Mail() {
             display: "flex",
             flexDirection: "column",
             minWidth: 0,
+            minHeight: 0,
           }}
         >
           <div style={{ padding: "16px 16px 10px" }}>
@@ -476,7 +504,7 @@ export default function Mail() {
               })}
             </div>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 12px" }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 10px 12px" }}>
             {loading && (
               <div
                 style={{
@@ -632,7 +660,7 @@ export default function Mail() {
         </div>
 
         {/* Right: reading pane */}
-        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
           {selMail ? (
             <>
               <div
@@ -721,7 +749,7 @@ export default function Mail() {
                   </div>
                 </div>
               </div>
-              <div style={{ flex: 1, overflowY: "auto", padding: "24px 26px" }}>
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 26px" }}>
                 <div
                   style={{
                     fontSize: 14,
@@ -752,24 +780,32 @@ export default function Mail() {
                       첨부파일
                     </div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {selMail.attachments.map((a, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "9px 13px",
-                            border: "1px solid rgba(12,15,13,0.12)",
-                            borderRadius: 10,
-                            fontSize: 12.5,
-                            fontWeight: 500,
-                            background: "#FAFBFA",
-                          }}
-                        >
-                          📎 {a.name}
-                        </span>
-                      ))}
+                      {selMail.attachments.map((a, i) => {
+                        const canDownload = connected && !!a.attachmentId;
+                        return (
+                          <span
+                            key={i}
+                            onClick={() => canDownload && onAttachment(selMail.id, a)}
+                            title={canDownload ? "다운로드" : undefined}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "9px 13px",
+                              border: "1px solid rgba(12,15,13,0.12)",
+                              borderRadius: 10,
+                              fontSize: 12.5,
+                              fontWeight: 500,
+                              background: "#FAFBFA",
+                              cursor: canDownload ? "pointer" : "default",
+                              color: canDownload ? "#0E7B4E" : "#3A3C45",
+                            }}
+                          >
+                            📎 {a.name}
+                            {canDownload && <span style={{ fontSize: 13 }}>⭳</span>}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

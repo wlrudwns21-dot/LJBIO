@@ -154,9 +154,11 @@ create table if not exists public.approvals (
 -- partners (거래처) + contract types
 -- ---------------------------------------------------------------------------
 create table if not exists public.contract_types (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  sort        int not null default 0
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  sort          int not null default 0,
+  template_url  text,   -- uploaded contract-form file (base64 data URL)
+  template_name text
 );
 
 create table if not exists public.partners (

@@ -20,6 +20,14 @@ export interface GmailToken {
   token: string;
   email: string;
   exp: number;
+  /** Supabase auth user id this token belongs to (prevents cross-user leakage). */
+  userId: string;
+}
+
+export interface GmailAttachment {
+  name: string;
+  attachmentId?: string;
+  mimeType?: string;
 }
 
 export interface GmailMessage {
@@ -35,17 +43,21 @@ export interface GmailMessage {
   body: string;
   unread: boolean;
   starred: boolean;
-  attachments: { name: string }[];
+  attachments: GmailAttachment[];
   sent_at: string;
 }
 
 /* --------------------------------------------------------------- token store */
-export function getGmailToken(): GmailToken | null {
+/** Returns the stored token only if it belongs to `userId` and hasn't expired.
+ *  Without a userId (no active session) there is no valid connection. */
+export function getGmailToken(userId?: string): GmailToken | null {
   try {
+    if (!userId) return null;
     const raw = localStorage.getItem(TOKEN_KEY);
     if (!raw) return null;
     const t = JSON.parse(raw) as GmailToken;
     if (!t.token || Date.now() > t.exp) return null;
+    if (t.userId !== userId) return null; // token belongs to a different user
     return t;
   } catch {
     return null;
@@ -53,8 +65,13 @@ export function getGmailToken(): GmailToken | null {
 }
 
 /** Called from the auth layer whenever a Google provider_token appears. */
-export function storeGmailToken(token: string, email: string) {
-  const t: GmailToken = { token, email, exp: Date.now() + 55 * 60 * 1000 };
+export function storeGmailToken(token: string, email: string, userId: string) {
+  const t: GmailToken = {
+    token,
+    email,
+    userId,
+    exp: Date.now() + 55 * 60 * 1000,
+  };
   try {
     localStorage.setItem(TOKEN_KEY, JSON.stringify(t));
   } catch {
@@ -206,14 +223,53 @@ function extractBody(payload: any): string {
   return "";
 }
 
-function collectAttachments(payload: any): { name: string }[] {
-  const out: { name: string }[] = [];
+function collectAttachments(payload: any): GmailAttachment[] {
+  const out: GmailAttachment[] = [];
   (function walk(p: any) {
     if (!p) return;
-    if (p.filename && p.filename.length > 0) out.push({ name: p.filename });
+    if (p.filename && p.filename.length > 0 && p.body?.attachmentId) {
+      out.push({
+        name: p.filename,
+        attachmentId: p.body.attachmentId,
+        mimeType: p.mimeType,
+      });
+    }
     (p.parts || []).forEach(walk);
   })(payload);
   return out;
+}
+
+function b64urlToBytes(data: string): Uint8Array {
+  const b64 = data.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+/** Fetch one attachment's bytes and trigger a browser download. */
+export async function downloadAttachment(
+  token: string,
+  messageId: string,
+  att: GmailAttachment,
+) {
+  if (!att.attachmentId) return;
+  const res = await gfetch(
+    token,
+    `/messages/${messageId}/attachments/${att.attachmentId}`,
+  );
+  const bytes = b64urlToBytes(res.data || "");
+  const blob = new Blob([bytes as unknown as BlobPart], {
+    type: att.mimeType || "application/octet-stream",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = att.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function toMessage(m: any, folder: string): GmailMessage {
