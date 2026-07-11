@@ -8,7 +8,16 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { storeGmailToken } from "@/lib/gmail";
 import type { Profile } from "@/types/database";
+
+/** After a Google OAuth redirect the session carries a one-time provider_token
+ *  for the Gmail API — grab it before it's gone. */
+function captureGmail(s: Session | null) {
+  if (s?.provider_token && s.user?.email) {
+    storeGmailToken(s.provider_token, s.user.email);
+  }
+}
 
 interface SignupInput {
   name: string;
@@ -57,11 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     supabase.auth.getSession().then(async ({ data }) => {
+      captureGmail(data.session);
       setSession(data.session);
       await loadProfile(data.session?.user.id);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, s) => {
+      captureGmail(s);
       setSession(s);
       await loadProfile(s?.user.id);
     });

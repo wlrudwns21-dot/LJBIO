@@ -4,6 +4,19 @@ import { Modal, useToast } from "../ui";
 import { useAuth } from "@/context/AuthContext";
 import { demoMails } from "../data/demo";
 import type { Mail as MailRow } from "@/types/database";
+import {
+  getGmailToken,
+  connectGmail,
+  clearGmailToken,
+  listFolder,
+  getMessage,
+  markRead,
+  setStar,
+  trash,
+  sendMessage,
+  isTokenExpired,
+  type GmailToken,
+} from "@/lib/gmail";
 
 const FOLDER_DEFS: [MailRow["folder"] | "starred", string][] = [
   ["inbox", "받은편지함"],
@@ -15,23 +28,78 @@ const FOLDER_DEFS: [MailRow["folder"] | "starred", string][] = [
 
 type Compose = { to: string; subject: string; body: string };
 
+/** Fields shared by demo/Supabase rows and live Gmail messages. */
+type MailItem = {
+  id: string;
+  folder: string;
+  from_name: string;
+  from_email: string;
+  from_init: string | null;
+  avatar_bg: string;
+  to_addr: string;
+  subject: string;
+  preview: string;
+  body: string;
+  unread: boolean;
+  starred: boolean;
+  attachments: { name: string }[];
+  sent_at: string;
+  owner_id?: string | null;
+};
+
 export default function Mail() {
   const flash = useToast();
   const { profile } = useAuth();
-  const [mails, setMails] = useState<MailRow[]>(demoMails);
+  const [gmail, setGmail] = useState<GmailToken | null>(() => getGmailToken());
+  const connected = !!gmail;
+
+  const [mails, setMails] = useState<MailItem[]>(demoMails as MailItem[]);
   const [mailFolder, setMailFolder] = useState<string>("inbox");
   const [selectedMailId, setSelectedMailId] = useState<string | null>(null);
   const [compose, setCompose] = useState<Compose | null>(null);
   const [justSent, setJustSent] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
 
+  // Not connected → demo seed or Supabase-stored preview mails.
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (connected) return;
+    if (!isSupabaseConfigured) {
+      setMails(demoMails as MailItem[]);
+      return;
+    }
     supabase
       .from("mails")
       .select("*")
       .order("sent_at", { ascending: false })
-      .then(({ data }) => data && setMails(data as MailRow[]));
-  }, []);
+      .then(({ data }) => data && setMails(data as MailItem[]));
+  }, [connected]);
+
+  // Connected → live Gmail for the selected folder.
+  useEffect(() => {
+    if (!connected || !gmail) return;
+    let cancelled = false;
+    setLoading(true);
+    setSelectedMailId(null);
+    listFolder(gmail.token, mailFolder)
+      .then((list) => {
+        if (!cancelled) setMails(list as MailItem[]);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (isTokenExpired(e)) {
+          setGmail(null);
+          flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+        } else {
+          flash("메일을 불러오지 못했습니다.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, gmail, mailFolder]);
 
   async function persist(fn: () => PromiseLike<unknown>) {
     if (!isSupabaseConfigured) return;
@@ -42,13 +110,45 @@ export default function Mail() {
     }
   }
 
-  const mailDate = (m: MailRow) => (m.sent_at || "").slice(0, 10);
-  const mailTime = (m: MailRow) =>
+  async function doConnect() {
+    const { error } = await connectGmail();
+    if (error) flash("연결 실패: " + error);
+  }
+  function disconnect() {
+    clearGmailToken();
+    setGmail(null);
+    setSelectedMailId(null);
+    setMails(isSupabaseConfigured ? [] : (demoMails as MailItem[]));
+    flash("Gmail 연결을 해제했습니다");
+  }
+  function refresh() {
+    if (!gmail) return;
+    setLoading(true);
+    listFolder(gmail.token, mailFolder)
+      .then((list) => setMails(list as MailItem[]))
+      .catch((e) => {
+        if (isTokenExpired(e)) setGmail(null);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  const mailDate = (m: MailItem) => (m.sent_at || "").slice(0, 10);
+  const mailTime = (m: MailItem) =>
     justSent.has(m.id) ? "방금" : (m.sent_at || "").slice(11, 16);
 
-  function openMail(id: string) {
+  async function openMail(id: string) {
     setSelectedMailId(id);
     setMails((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
+    if (connected && gmail) {
+      try {
+        const full = await getMessage(gmail.token, id, mailFolder);
+        setMails((ms) => ms.map((m) => (m.id === id ? (full as MailItem) : m)));
+        markRead(gmail.token, id).catch(() => {});
+      } catch (e) {
+        if (isTokenExpired(e)) setGmail(null);
+      }
+      return;
+    }
     persist(() => supabase.from("mails").update({ unread: false }).eq("id", id));
   }
 
@@ -56,26 +156,64 @@ export default function Mail() {
     const cur = mails.find((m) => m.id === id);
     const next = !cur?.starred;
     setMails((ms) => ms.map((m) => (m.id === id ? { ...m, starred: next } : m)));
+    if (connected && gmail) {
+      setStar(gmail.token, id, next).catch((e) => {
+        if (isTokenExpired(e)) setGmail(null);
+      });
+      return;
+    }
     persist(() => supabase.from("mails").update({ starred: next }).eq("id", id));
   }
 
   function trashMail(id: string) {
+    if (connected && gmail) {
+      setMails((ms) => ms.filter((m) => m.id !== id));
+      setSelectedMailId(null);
+      trash(gmail.token, id).catch((e) => {
+        if (isTokenExpired(e)) setGmail(null);
+      });
+      flash("메일을 휴지통으로 이동했습니다");
+      return;
+    }
     setMails((ms) => ms.map((m) => (m.id === id ? { ...m, folder: "trash" } : m)));
     setSelectedMailId(null);
     persist(() => supabase.from("mails").update({ folder: "trash" }).eq("id", id));
     flash("메일을 휴지통으로 이동했습니다");
   }
 
-  function sendMail() {
+  async function sendMail() {
     if (!compose) return;
     if (!compose.to.trim()) {
       flash("받는 사람을 입력하세요");
       return;
     }
+    if (connected && gmail) {
+      try {
+        await sendMessage(
+          gmail.token,
+          gmail.email,
+          compose.to,
+          compose.subject || "(제목 없음)",
+          compose.body || "",
+        );
+        setCompose(null);
+        flash("메일을 보냈습니다");
+        if (mailFolder === "sent") refresh();
+      } catch (e) {
+        if (isTokenExpired(e)) {
+          setGmail(null);
+          flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+        } else {
+          flash("메일 전송에 실패했습니다.");
+        }
+      }
+      return;
+    }
+    // demo / preview mode
     const nid = String(
       mails.reduce((a, m) => Math.max(a, Number(m.id) || 0), 0) + 1,
     );
-    const nm: MailRow = {
+    const nm: MailItem = {
       id: nid,
       owner_id: profile?.id ?? null,
       folder: "sent",
@@ -118,8 +256,9 @@ export default function Mail() {
   }
 
   const inboxUnread = mails.filter((m) => m.folder === "inbox" && m.unread).length;
-  const inFolder =
-    mailFolder === "starred"
+  const inFolder = connected
+    ? mails
+    : mailFolder === "starred"
       ? mails.filter((m) => m.starred && m.folder !== "trash")
       : mails.filter((m) => m.folder === mailFolder);
   const selMail = inFolder.find((m) => m.id === selectedMailId) || null;
@@ -127,55 +266,118 @@ export default function Mail() {
 
   return (
     <div className="fade" style={{ maxWidth: 1240, margin: "0 auto" }}>
-      {/* Gmail-connect banner */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          background: "rgba(42,111,219,0.06)",
-          border: "1px solid rgba(42,111,219,0.22)",
-          borderRadius: 12,
-          padding: "12px 16px",
-          marginBottom: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <span style={{ fontSize: 16 }}>✉</span>
-        <span
+      {/* Gmail connection banner */}
+      {connected ? (
+        <div
           style={{
-            flex: 1,
-            minWidth: 200,
-            fontSize: 13,
-            color: "#2A4E85",
-            fontWeight: 500,
-            lineHeight: 1.55,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            background: "rgba(14,123,78,0.06)",
+            border: "1px solid rgba(14,123,78,0.22)",
+            borderRadius: 12,
+            padding: "12px 16px",
+            marginBottom: 16,
+            flexWrap: "wrap",
           }}
         >
-          구글 메일(Gmail) 연동 대기 — 아래는 미리보기입니다.{" "}
-          <b>Claude Code로 Gmail API·OAuth를 연결</b>하면 실제 메일함이 표시됩니다. 메일
-          본문·첨부는 저장하지 않고 ID만 보관해 DB 용량을 최소화합니다.
-        </span>
-        <button
-          onClick={() =>
-            flash("Claude Code 연동 설정 후 실제 Gmail 계정이 연결됩니다 (데모)")
-          }
-          className="gbtn"
+          <span style={{ fontSize: 16 }}>✅</span>
+          <span
+            style={{
+              flex: 1,
+              minWidth: 200,
+              fontSize: 13,
+              color: "#256F4C",
+              fontWeight: 500,
+              lineHeight: 1.55,
+            }}
+          >
+            <b>{gmail?.email}</b> 의 Gmail이 연결되었습니다. 실제 메일함을 실시간으로
+            불러옵니다. (본문·첨부는 저장하지 않습니다.)
+          </span>
+          <button
+            onClick={refresh}
+            className="gbtn"
+            style={{
+              padding: "8px 14px",
+              border: "1px solid rgba(14,123,78,0.4)",
+              borderRadius: 9,
+              background: "#fff",
+              color: "#0E7B4E",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⟳ 새로고침
+          </button>
+          <button
+            onClick={disconnect}
+            className="gbtn"
+            style={{
+              padding: "8px 14px",
+              border: "1px solid rgba(12,15,13,0.14)",
+              borderRadius: 9,
+              background: "#fff",
+              color: "#6B7280",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            연결 해제
+          </button>
+        </div>
+      ) : (
+        <div
           style={{
-            padding: "8px 15px",
-            border: "1px solid rgba(42,111,219,0.4)",
-            borderRadius: 9,
-            background: "#fff",
-            color: "#2A6FDB",
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            background: "rgba(42,111,219,0.06)",
+            border: "1px solid rgba(42,111,219,0.22)",
+            borderRadius: 12,
+            padding: "12px 16px",
+            marginBottom: 16,
+            flexWrap: "wrap",
           }}
         >
-          구글 계정 연결
-        </button>
-      </div>
+          <span style={{ fontSize: 16 }}>✉</span>
+          <span
+            style={{
+              flex: 1,
+              minWidth: 200,
+              fontSize: 13,
+              color: "#2A4E85",
+              fontWeight: 500,
+              lineHeight: 1.55,
+            }}
+          >
+            아래는 미리보기입니다. <b>내 Gmail 계정을 연결</b>하면 실제 메일함이
+            표시됩니다. 메일 본문·첨부는 저장하지 않고 필요할 때 실시간으로 불러와 DB
+            용량을 최소화합니다.
+          </span>
+          <button
+            onClick={doConnect}
+            className="gbtn"
+            style={{
+              padding: "8px 15px",
+              border: "1px solid rgba(42,111,219,0.4)",
+              borderRadius: 9,
+              background: "#fff",
+              color: "#2A6FDB",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            🔗 내 Gmail 연결
+          </button>
+        </div>
+      )}
 
       <div
         className="g-mail"
@@ -275,133 +477,146 @@ export default function Mail() {
             </div>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "0 10px 12px" }}>
-            {inFolder.map((m) => {
-              const isSent = mailFolder === "sent" || mailFolder === "drafts";
-              return (
-                <div
-                  key={m.id}
-                  onClick={() => openMail(m.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 11,
-                    padding: "13px 14px",
-                    borderRadius: 11,
-                    cursor: "pointer",
-                    marginBottom: 2,
-                    background:
-                      m.id === selectedMailId
-                        ? "rgba(14,123,78,0.08)"
-                        : "transparent",
-                    borderLeft: `3px solid ${m.unread ? "#0E7B4E" : "transparent"}`,
-                  }}
-                >
+            {loading && (
+              <div
+                style={{
+                  padding: "30px 16px",
+                  textAlign: "center",
+                  color: "#9AA29C",
+                  fontSize: 13,
+                }}
+              >
+                메일을 불러오는 중…
+              </div>
+            )}
+            {!loading &&
+              inFolder.map((m) => {
+                const isSent = mailFolder === "sent" || mailFolder === "drafts";
+                return (
                   <div
+                    key={m.id}
+                    onClick={() => openMail(m.id)}
                     style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: "50%",
-                      flexShrink: 0,
-                      background: m.avatar_bg,
                       display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: 14,
+                      alignItems: "flex-start",
+                      gap: 11,
+                      padding: "13px 14px",
+                      borderRadius: 11,
+                      cursor: "pointer",
+                      marginBottom: 2,
+                      background:
+                        m.id === selectedMailId
+                          ? "rgba(14,123,78,0.08)"
+                          : "transparent",
+                      borderLeft: `3px solid ${m.unread ? "#0E7B4E" : "transparent"}`,
                     }}
                   >
-                    {m.from_init}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        background: m.avatar_bg,
                         display: "flex",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        alignItems: "baseline",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#fff",
+                        fontWeight: 700,
+                        fontSize: 14,
                       }}
                     >
-                      <span
+                      {m.from_init}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
                         style={{
-                          fontSize: 13,
-                          fontWeight: m.unread ? 700 : 600,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          alignItems: "baseline",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: m.unread ? 700 : 600,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {isSent
+                            ? "받는사람: " + (m.to_addr || "(미지정)")
+                            : m.from_name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#9AA29C",
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {mailDate(m).slice(5)}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: m.unread ? 700 : 500,
+                          marginTop: 2,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {isSent
-                          ? "받는사람: " + (m.to_addr || "(미지정)")
-                          : m.from_name}
-                      </span>
-                      <span
+                        {m.subject || "(제목 없음)"}
+                      </div>
+                      <div
                         style={{
-                          fontSize: 11,
-                          color: "#9AA29C",
+                          fontSize: 11.5,
+                          color: "#84908A",
+                          marginTop: 2,
                           whiteSpace: "nowrap",
-                          flexShrink: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
                         }}
                       >
-                        {mailDate(m).slice(5)}
+                        {m.preview}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 5,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleStar(m.id);
+                        }}
+                        style={{
+                          cursor: "pointer",
+                          fontSize: 15,
+                          color: m.starred ? "#E8B923" : "#C4C9C4",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {m.starred ? "★" : "☆"}
                       </span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        fontWeight: m.unread ? 700 : 500,
-                        marginTop: 2,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {m.subject || "(제목 없음)"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        color: "#84908A",
-                        marginTop: 2,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {m.preview}
+                      {m.attachments.length > 0 && (
+                        <span style={{ fontSize: 12, color: "#84908A" }}>📎</span>
+                      )}
                     </div>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 5,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleStar(m.id);
-                      }}
-                      style={{
-                        cursor: "pointer",
-                        fontSize: 15,
-                        color: m.starred ? "#E8B923" : "#C4C9C4",
-                        lineHeight: 1,
-                      }}
-                    >
-                      {m.starred ? "★" : "☆"}
-                    </span>
-                    {m.attachments.length > 0 && (
-                      <span style={{ fontSize: 12, color: "#84908A" }}>📎</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {inFolder.length === 0 && (
+                );
+              })}
+            {!loading && inFolder.length === 0 && (
               <div
                 style={{
                   padding: "40px 16px",
@@ -500,7 +715,7 @@ export default function Mail() {
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: "#84908A", marginTop: 1 }}>
-                      받는사람: {selMail.to_addr || "나 (kyungjun.ji@bio-lj.com)"} ·{" "}
+                      받는사람: {selMail.to_addr || (gmail?.email ?? "나")} ·{" "}
                       {mailDate(selMail)} {mailTime(selMail)}
                     </div>
                   </div>
@@ -513,6 +728,7 @@ export default function Mail() {
                     lineHeight: 1.8,
                     color: "#2A2C33",
                     whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
                   }}
                 >
                   {selMail.body || "(내용 없음)"}
@@ -676,7 +892,9 @@ export default function Mail() {
                   보낸사람
                 </span>
                 <span style={{ fontSize: 13.5, color: "#3A3C45" }}>
-                  지경준 &lt;kyungjun.ji@bio-lj.com&gt;
+                  {connected
+                    ? gmail?.email
+                    : "지경준 <kyungjun.ji@bio-lj.com>"}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -753,15 +971,24 @@ export default function Mail() {
               <div
                 style={{
                   fontSize: 12,
-                  color: "#84908A",
-                  background: "#FAFBFA",
+                  color: connected ? "#256F4C" : "#84908A",
+                  background: connected ? "rgba(14,123,78,0.06)" : "#FAFBFA",
                   borderRadius: 9,
                   padding: "10px 13px",
                   lineHeight: 1.55,
                 }}
               >
-                실제 발송은 <b style={{ color: "#0C0F0D" }}>Gmail 연동</b> 후
-                활성화됩니다. 현재는 보낸편지함에 미리보기로 저장됩니다.
+                {connected ? (
+                  <>
+                    <b style={{ color: "#0E7B4E" }}>Gmail로 실제 발송</b>됩니다 —
+                    받는 사람에게 메일이 전송됩니다.
+                  </>
+                ) : (
+                  <>
+                    실제 발송은 <b style={{ color: "#0C0F0D" }}>Gmail 연결</b> 후
+                    활성화됩니다. 현재는 보낸편지함에 미리보기로 저장됩니다.
+                  </>
+                )}
               </div>
             </div>
             <div
