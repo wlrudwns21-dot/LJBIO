@@ -94,15 +94,26 @@
   .g-kanban > div {
     scroll-snap-align: start;
   }
+  /* chat master-detail: list view by default, full-screen thread when opened */
   .g-chat {
     grid-template-columns: 1fr !important;
-    grid-template-rows: auto 1fr;
-    height: calc(100vh - 118px) !important;
+    grid-template-rows: 1fr !important;
+    height: calc(100dvh - 118px) !important;
   }
-  .g-chat > div:first-child {
-    max-height: 38vh;
+  .g-chat .chat-list {
     border-right: none !important;
-    border-bottom: 1px solid rgba(12, 15, 13, 0.08);
+  }
+  .g-chat .chat-thread {
+    display: none !important;
+  }
+  .g-chat.chat-open .chat-list {
+    display: none !important;
+  }
+  .g-chat.chat-open .chat-thread {
+    display: flex !important;
+  }
+  .chat-back {
+    display: inline-flex !important;
   }
   .g-mail {
     grid-template-columns: 1fr !important;

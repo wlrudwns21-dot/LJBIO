@@ -36,6 +36,7 @@ export default function Chat() {
   const [convs, setConvs] = useState<Conv[]>(cloneDemo);
   const [activeId, setActiveId] = useState<string>(demoConversations[0]?.id ?? "");
   const [draft, setDraft] = useState("");
+  const [threadOpen, setThreadOpen] = useState(false); // mobile: show thread full-screen
   const [members, setMembers] = useState<Member[]>(demoMembers as Member[]);
   const [creator, setCreator] = useState<Creator | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -164,6 +165,7 @@ export default function Chat() {
   function openConv(id: string) {
     setConvs((prev) => prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)));
     setActiveId(id);
+    setThreadOpen(true);
   }
 
   function deleteConv(id: string) {
@@ -214,7 +216,7 @@ export default function Chat() {
 
   return (
     <div
-      className="fade g-chat"
+      className={"fade g-chat" + (threadOpen ? " chat-open" : "")}
       style={{
         maxWidth: 1240,
         margin: "0 auto",
@@ -228,7 +230,7 @@ export default function Chat() {
       }}
     >
       {/* conversation list */}
-      <div style={{ borderRight: "1px solid rgba(12,15,13,0.08)", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div className="chat-list" style={{ borderRight: "1px solid rgba(12,15,13,0.08)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "18px 18px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700 }}>메시지</h3>
@@ -300,8 +302,16 @@ export default function Chat() {
       </div>
 
       {/* active conversation */}
-      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+      <div className="chat-thread" style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <div style={{ padding: "15px 22px", borderBottom: "1px solid rgba(12,15,13,0.08)", display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            className="chat-back"
+            onClick={() => setThreadOpen(false)}
+            aria-label="목록"
+            style={{ alignItems: "center", justifyContent: "center", width: 34, height: 34, flexShrink: 0, border: "1px solid rgba(12,15,13,0.12)", borderRadius: 9, background: "#fff", fontSize: 16, cursor: "pointer" }}
+          >
+            ‹
+          </button>
           <div style={{ width: 38, height: 38, borderRadius: "50%", background: active?.avatar_bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>
             {active?.init}
           </div>
