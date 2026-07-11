@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { useToast } from "../ui";
-import { demoConversations } from "../data/demo";
+import { Modal, useToast } from "../ui";
+import { demoConversations, demoMembers, demoMe } from "../data/demo";
 import type { Conversation } from "@/types/database";
+
+type Member = { name: string; email: string; dept: string; init: string | null; avatar_bg: string };
+type Creator = { mode: "dm" | "group"; name: string; memberEmail: string };
 
 type ChatMsg = {
   author?: string;
@@ -33,7 +36,10 @@ export default function Chat() {
   const [convs, setConvs] = useState<Conv[]>(cloneDemo);
   const [activeId, setActiveId] = useState<string>(demoConversations[0]?.id ?? "");
   const [draft, setDraft] = useState("");
+  const [members, setMembers] = useState<Member[]>(demoMembers as Member[]);
+  const [creator, setCreator] = useState<Creator | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const myEmail = profile?.email ?? demoMe.email;
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -69,6 +75,77 @@ export default function Chat() {
       setActiveId((id) => (list.some((c) => c.id === id) ? id : list[0]?.id ?? ""));
     })().catch(() => {});
   }, [profile]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("profiles")
+      .select("name,email,dept,init,avatar_bg")
+      .eq("status", "approved")
+      .then(({ data }) => data && setMembers(data as Member[]));
+  }, []);
+
+  async function createConv() {
+    if (!creator) return;
+    const maxSort = convs.reduce((a, c) => Math.max(a, c.sort || 0), 0);
+    let row: Omit<Conversation, "id" | "created_at">;
+    if (creator.mode === "group") {
+      const nm = creator.name.trim();
+      if (!nm) {
+        flash("대화방 이름을 입력하세요");
+        return;
+      }
+      row = {
+        name: nm,
+        is_group: true,
+        role_label: "",
+        init: nm.charAt(0),
+        avatar_bg: "#0C0F0D",
+        members: 1,
+        sort: maxSort + 1,
+      };
+    } else {
+      const m = members.find((x) => x.email === creator.memberEmail);
+      if (!m) {
+        flash("대화 상대를 선택하세요");
+        return;
+      }
+      if (convs.some((c) => !c.is_group && c.name === m.name)) {
+        flash("이미 대화방이 있습니다");
+        return;
+      }
+      row = {
+        name: m.name,
+        is_group: false,
+        role_label: m.dept || "",
+        init: m.init || m.name.charAt(0),
+        avatar_bg: m.avatar_bg || "#7A4DD1",
+        members: 0,
+        sort: maxSort + 1,
+      };
+    }
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.from("conversations").insert(row).select().single();
+      if (data) {
+        const c = { ...(data as Conversation), messages: [], unread: 0, last: "" } as Conv;
+        setConvs((prev) => [...prev, c]);
+        setActiveId(c.id);
+      }
+    } else {
+      const c = {
+        ...row,
+        id: "c" + Date.now(),
+        created_at: "",
+        messages: [],
+        unread: 0,
+        last: "",
+      } as Conv;
+      setConvs((prev) => [...prev, c]);
+      setActiveId(c.id);
+    }
+    setCreator(null);
+    flash("대화방을 만들었습니다");
+  }
 
   const active = convs.find((c) => c.id === activeId) || convs[0];
   const isGroup = !!active?.is_group;
@@ -153,7 +230,16 @@ export default function Chat() {
       {/* conversation list */}
       <div style={{ borderRight: "1px solid rgba(12,15,13,0.08)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "18px 18px 12px" }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700 }}>메시지</h3>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>메시지</h3>
+            <button
+              className="pbtn"
+              onClick={() => setCreator({ mode: "dm", name: "", memberEmail: "" })}
+              style={{ padding: "7px 12px", border: "none", borderRadius: 8, background: "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              + 새 대화
+            </button>
+          </div>
           <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, background: "rgba(12,15,13,0.05)", borderRadius: 9, padding: "8px 11px" }}>
             <span style={{ color: "#84908A" }}>⌕</span>
             <input placeholder="직원 검색…" style={{ border: "none", background: "transparent", outline: "none", fontSize: 13, width: "100%" }} />
@@ -312,6 +398,109 @@ export default function Chat() {
           </button>
         </div>
       </div>
+
+      <Modal open={!!creator} onClose={() => setCreator(null)} width={460}>
+        {creator && (
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em" }}>새 대화 시작</h2>
+            <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+              {(["dm", "group"] as const).map((mode) => {
+                const on = creator.mode === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => setCreator({ ...creator, mode })}
+                    style={{
+                      flex: 1,
+                      padding: "10px 12px",
+                      borderRadius: 9,
+                      border: `1.5px solid ${on ? "#0E7B4E" : "rgba(12,15,13,0.12)"}`,
+                      background: on ? "rgba(14,123,78,0.08)" : "#fff",
+                      color: on ? "#0E7B4E" : "#4A4C55",
+                      fontSize: 13.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {mode === "dm" ? "1:1 대화" : "그룹 채팅"}
+                  </button>
+                );
+              })}
+            </div>
+
+            {creator.mode === "group" ? (
+              <div style={{ marginTop: 16 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: "#4A4C55" }}>대화방 이름</label>
+                <input
+                  value={creator.name}
+                  onChange={(e) => setCreator({ ...creator, name: e.target.value })}
+                  placeholder="예: 태국 수출 TF"
+                  autoFocus
+                  style={{ marginTop: 5, width: "100%", padding: "11px 13px", border: "1.5px solid rgba(12,15,13,0.12)", borderRadius: 9, fontSize: 14 }}
+                />
+              </div>
+            ) : (
+              <div style={{ marginTop: 16 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: "#4A4C55" }}>대화 상대 선택</label>
+                <div style={{ marginTop: 8, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {members
+                    .filter((m) => m.email !== myEmail)
+                    .map((m) => {
+                      const sel = creator.memberEmail === m.email;
+                      return (
+                        <div
+                          key={m.email}
+                          onClick={() => setCreator({ ...creator, memberEmail: m.email })}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 11,
+                            padding: "9px 11px",
+                            borderRadius: 10,
+                            cursor: "pointer",
+                            border: `1.5px solid ${sel ? "#0E7B4E" : "transparent"}`,
+                            background: sel ? "rgba(14,123,78,0.06)" : "transparent",
+                          }}
+                        >
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: m.avatar_bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13 }}>
+                            {m.init || m.name.charAt(0)}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{m.name}</div>
+                            <div style={{ fontSize: 11.5, color: "#84908A" }}>{m.dept}</div>
+                          </div>
+                          {sel && <span style={{ color: "#0E7B4E", fontWeight: 700 }}>✓</span>}
+                        </div>
+                      );
+                    })}
+                  {members.filter((m) => m.email !== myEmail).length === 0 && (
+                    <div style={{ padding: 20, textAlign: "center", color: "#9AA29C", fontSize: 13 }}>
+                      대화할 직원이 없습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 22, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setCreator(null)}
+                className="gbtn"
+                style={{ padding: "11px 20px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 9, background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                취소
+              </button>
+              <button
+                onClick={createConv}
+                className="pbtn"
+                style={{ padding: "11px 24px", border: "none", borderRadius: 9, background: "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                대화방 만들기
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
