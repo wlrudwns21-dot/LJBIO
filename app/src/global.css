@@ -1,0 +1,126 @@
+/* LJ-BIO global styles — ported from the prototype's <style> block. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, sans-serif;
+  color: #0c0f0d;
+  background: #eef2ef;
+  -webkit-font-smoothing: antialiased;
+}
+.mono {
+  font-family: "Space Grotesk", sans-serif;
+}
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+a {
+  color: inherit;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(12, 15, 13, 0.16);
+  border-radius: 20px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(12, 15, 13, 0.28);
+  background-clip: content-box;
+}
+
+/* interaction primitives from the prototype */
+.navitem {
+  transition: background 0.2s, color 0.2s;
+}
+.navitem:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.lift {
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s, border-color 0.3s;
+}
+.lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 22px 44px -30px rgba(12, 15, 13, 0.4);
+  border-color: rgba(14, 123, 78, 0.4);
+}
+.pbtn {
+  transition: transform 0.25s, box-shadow 0.3s, background 0.25s, opacity 0.2s;
+}
+.pbtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -14px rgba(14, 123, 78, 0.6);
+}
+.gbtn {
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.gbtn:hover {
+  background: rgba(14, 123, 78, 0.08);
+  border-color: rgba(14, 123, 78, 0.5);
+}
+.row-h {
+  transition: background 0.18s;
+}
+.row-h:hover {
+  background: rgba(14, 123, 78, 0.05);
+}
+.fld {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.fld:focus {
+  outline: none;
+  border-color: #0e7b4e;
+  box-shadow: 0 0 0 3px rgba(14, 123, 78, 0.14);
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.fade {
+  animation: fadein 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.modalwrap {
+  animation: fadein 0.3s ease both;
+}
+.modalbox {
+  animation: pop 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
