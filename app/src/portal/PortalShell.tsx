@@ -42,9 +42,14 @@ export default function PortalShell() {
     init: "지",
   };
   const meInit = me.init || me.name.charAt(0);
+  const isAdmin = me.role === "admin";
   const isManagerUp = me.role === "admin" || me.role === "manager";
-  // 파일 관리는 팀장급 이상만 접근 (일반 직원에게는 숨김)
-  const navSections = SECTIONS.filter((s) => s.key !== "files" || isManagerUp);
+  // 파일 관리·재무 현황은 팀장급 이상만, 관리자 메뉴는 관리자만 노출
+  const navSections = SECTIONS.filter((s) => {
+    if (s.key === "files" || s.key === "finance") return isManagerUp;
+    if (s.key === "admin") return isAdmin;
+    return true;
+  });
 
   const active = useMemo(
     () => SECTIONS.find((s) => s.key === section) || SECTIONS[0],
@@ -218,23 +223,6 @@ export default function PortalShell() {
             <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 1 }}>{active.sub}</div>
           </div>
           <div style={{ flex: 1 }} />
-          <div
-            className="topbar-search"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              background: "rgba(12,15,13,0.05)",
-              border: "1px solid rgba(12,15,13,0.09)",
-              borderRadius: 10,
-              padding: "9px 13px",
-              width: 240,
-              maxWidth: "30vw",
-            }}
-          >
-            <span style={{ color: "#84908A", fontSize: 14 }}>⌕</span>
-            <input placeholder="검색…" style={{ border: "none", background: "transparent", outline: "none", fontSize: 13.5, width: "100%" }} />
-          </div>
           <Link
             to="/"
             className="gbtn topbar-home"

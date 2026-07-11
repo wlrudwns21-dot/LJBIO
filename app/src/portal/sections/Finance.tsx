@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { fmtKRW } from "@/lib/theme";
+import { useAuth } from "@/context/AuthContext";
 import { demoSegments } from "../data/demo";
 import type { Segment } from "@/types/database";
 
 export default function Finance() {
+  const { profile } = useAuth();
+  const role = profile?.role ?? "admin";
+  const canAccess = role === "admin" || role === "manager";
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
 
   useEffect(() => {
@@ -44,6 +48,30 @@ export default function Finance() {
     { label: "사업 부문 수", value: segments.length + "개", tone: "#7A4DD1" },
     { label: "최대 매출 부문", value: topSeg ? (topSeg as Segment).name : "—", tone: "#C6803A" },
   ];
+
+  if (!canAccess)
+    return (
+      <div
+        className="fade"
+        style={{
+          maxWidth: 560,
+          margin: "60px auto 0",
+          textAlign: "center",
+          background: "#fff",
+          border: "1px solid rgba(12,15,13,0.07)",
+          borderRadius: 18,
+          padding: "48px 32px",
+        }}
+      >
+        <div style={{ fontSize: 40 }}>🔒</div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>접근 권한이 없습니다</h3>
+        <p style={{ fontSize: 14, color: "#84908A", marginTop: 10, lineHeight: 1.6 }}>
+          재무 현황은 <b>팀장급 이상</b>만 이용할 수 있습니다.
+          <br />
+          권한이 필요하면 관리자에게 문의하세요.
+        </p>
+      </div>
+    );
 
   return (
     <div className="fade" style={{ maxWidth: 1240, margin: "0 auto" }}>

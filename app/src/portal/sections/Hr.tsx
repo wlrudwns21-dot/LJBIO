@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { useToast } from "../ui";
-import { demoLeaves } from "../data/demo";
+import { useAuth } from "@/context/AuthContext";
+import { Modal, useToast } from "../ui";
+import { demoLeaves, demoMe } from "../data/demo";
 import type { Leave, ApprovalStatus } from "@/types/database";
+
+type NewReq = { type: string; range: string; days: string; reason: string };
+const fld: React.CSSProperties = {
+  marginTop: 5,
+  width: "100%",
+  padding: "10px 12px",
+  border: "1.5px solid rgba(12,15,13,0.12)",
+  borderRadius: 9,
+  fontSize: 14,
+};
+const lbl: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, color: "#4A4C55" };
 
 function typeStyle(t: string): { bg: string; color: string } {
   if (t === "출장") return { bg: "#FFF1E0", color: "#C6803A" };
@@ -12,7 +24,15 @@ function typeStyle(t: string): { bg: string; color: string } {
 
 export default function Hr() {
   const flash = useToast();
+  const { profile } = useAuth();
+  const me = {
+    name: profile?.name ?? demoMe.name,
+    dept: profile?.dept ?? demoMe.dept,
+    init: profile?.init ?? demoMe.init,
+    avatar_bg: profile?.avatar_bg ?? "#0E7B4E",
+  };
   const [leaves, setLeaves] = useState<Leave[]>(demoLeaves);
+  const [newReq, setNewReq] = useState<NewReq | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -22,6 +42,35 @@ export default function Hr() {
       .order("created_at", { ascending: false })
       .then(({ data }) => data && setLeaves(data as Leave[]));
   }, []);
+
+  async function submitLeave() {
+    if (!newReq) return;
+    if (!newReq.range.trim()) {
+      flash("기간을 입력하세요 (예: 8/5 ~ 8/7)");
+      return;
+    }
+    const base = {
+      name: me.name,
+      dept: me.dept,
+      init: me.init,
+      avatar_bg: me.avatar_bg,
+      type: newReq.type,
+      range: newReq.range.trim(),
+      days: newReq.days.trim() || "-",
+      status: "pending" as const,
+    };
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.from("leaves").insert(base).select().single();
+      if (data) setLeaves((prev) => [data as Leave, ...prev]);
+    } else {
+      setLeaves((prev) => [
+        { ...base, id: "l" + Date.now(), created_at: "" } as Leave,
+        ...prev,
+      ]);
+    }
+    setNewReq(null);
+    flash(newReq.type + " 신청이 접수되었습니다 (승인 대기)");
+  }
 
   async function decide(l: Leave, status: ApprovalStatus, msg: string) {
     setLeaves((prev) => prev.map((x) => (x.id === l.id ? { ...x, status } : x)));
@@ -55,7 +104,7 @@ export default function Hr() {
         <div style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 16, overflow: "hidden" }}>
           <div style={{ padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(12,15,13,0.07)" }}>
             <h3 style={{ fontSize: 16, fontWeight: 700 }}>휴가 · 출장 신청 현황</h3>
-            <button className="pbtn" onClick={() => flash("휴가/출장 신청 (데모)")} style={{ padding: "9px 15px", border: "none", borderRadius: 9, background: "#0C0F0D", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ 신청</button>
+            <button className="pbtn" onClick={() => setNewReq({ type: "연차", range: "", days: "", reason: "" })} style={{ padding: "9px 15px", border: "none", borderRadius: 9, background: "#0C0F0D", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ 신청</button>
           </div>
           {leaves.map((h) => {
             const t = typeStyle(h.type);
@@ -105,6 +154,82 @@ export default function Hr() {
           </div>
         </div>
       </div>
+
+      <Modal open={!!newReq} onClose={() => setNewReq(null)} width={480}>
+        {newReq && (
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em" }}>휴가 · 출장 신청</h2>
+            <p style={{ marginTop: 8, fontSize: 13, color: "#84908A" }}>
+              신청자: <b style={{ color: "#0C0F0D" }}>{me.name}</b> · {me.dept}
+            </p>
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={lbl}>유형</label>
+                <select
+                  className="fld"
+                  value={newReq.type}
+                  onChange={(e) => setNewReq({ ...newReq, type: e.target.value })}
+                  style={{ ...fld, background: "#fff" }}
+                >
+                  <option value="연차">연차</option>
+                  <option value="반차">반차</option>
+                  <option value="출장">출장</option>
+                  <option value="병가">병가</option>
+                  <option value="경조사">경조사</option>
+                </select>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={lbl}>기간</label>
+                  <input
+                    className="fld"
+                    value={newReq.range}
+                    onChange={(e) => setNewReq({ ...newReq, range: e.target.value })}
+                    placeholder="예: 8/5 ~ 8/7"
+                    style={fld}
+                  />
+                </div>
+                <div>
+                  <label style={lbl}>일수</label>
+                  <input
+                    className="fld"
+                    value={newReq.days}
+                    onChange={(e) => setNewReq({ ...newReq, days: e.target.value })}
+                    placeholder="예: 3일"
+                    style={fld}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>사유 (선택)</label>
+                <textarea
+                  className="fld"
+                  value={newReq.reason}
+                  onChange={(e) => setNewReq({ ...newReq, reason: e.target.value })}
+                  placeholder="사유를 입력하세요"
+                  style={{ ...fld, minHeight: 72, resize: "vertical", display: "block" }}
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: 22, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setNewReq(null)}
+                className="gbtn"
+                style={{ padding: "11px 20px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 9, background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                취소
+              </button>
+              <button
+                onClick={submitLeave}
+                className="pbtn"
+                style={{ padding: "11px 24px", border: "none", borderRadius: 9, background: "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                신청하기
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

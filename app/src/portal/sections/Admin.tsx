@@ -1,7 +1,33 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { theme, roleLabel, roleStyle, fmtKRW } from "@/lib/theme";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "../ui";
+
+function NoAccess({ label }: { label: string }) {
+  return (
+    <div
+      className="fade"
+      style={{
+        maxWidth: 560,
+        margin: "60px auto 0",
+        textAlign: "center",
+        background: "#fff",
+        border: "1px solid rgba(12,15,13,0.07)",
+        borderRadius: 18,
+        padding: "48px 32px",
+      }}
+    >
+      <div style={{ fontSize: 40 }}>🔒</div>
+      <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>접근 권한이 없습니다</h3>
+      <p style={{ fontSize: 14, color: "#84908A", marginTop: 10, lineHeight: 1.6 }}>
+        {label}
+        <br />
+        권한이 필요하면 관리자에게 문의하세요.
+      </p>
+    </div>
+  );
+}
 import {
   demoPending,
   demoMembers,
@@ -35,6 +61,8 @@ async function persist(fn: () => PromiseLike<unknown>) {
 
 export default function Admin() {
   const flash = useToast();
+  const { profile } = useAuth();
+  const canAccess = (profile?.role ?? "admin") === "admin";
 
   const [pending, setPending] = useState<PendingRow[]>(
     demoPending as PendingRow[],
@@ -260,6 +288,9 @@ export default function Admin() {
   }
 
   /* =============================================================== view */
+  if (!canAccess)
+    return <NoAccess label="관리자 메뉴는 관리자만 이용할 수 있습니다." />;
+
   return (
     <div className="fade" style={{ maxWidth: 1160, margin: "0 auto" }}>
       {/* 가입 승인 대기 */}
