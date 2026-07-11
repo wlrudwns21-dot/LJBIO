@@ -8,14 +8,19 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { storeGmailToken, clearGmailToken } from "@/lib/gmail";
+import { storeGmailToken, clearGmailToken, storeGmailRefresh } from "@/lib/gmail";
 import type { Profile } from "@/types/database";
 
 /** After a Google OAuth redirect the session carries a one-time provider_token
- *  for the Gmail API — grab it (scoped to this user) before it's gone. */
+ *  (and, with offline access, a provider_refresh_token) for the Gmail API —
+ *  grab the access token for immediate use and hand the refresh token to the
+ *  server so the connection survives expiry / re-login. */
 function captureGmail(s: Session | null) {
   if (s?.provider_token && s.user?.email) {
     storeGmailToken(s.provider_token, s.user.email, s.user.id);
+  }
+  if (s?.provider_refresh_token) {
+    void storeGmailRefresh(s.provider_refresh_token);
   }
 }
 

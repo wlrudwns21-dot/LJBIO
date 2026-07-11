@@ -18,6 +18,7 @@ import type {
   Leave,
   CalendarEvent,
   Profile,
+  Inquiry,
 } from "@/types/database";
 
 export const demoMe = {
@@ -189,4 +190,10 @@ export const demoEvents: (CalendarEvent & { day: string; mon: string })[] = [
   { id: "4", title: "일본 출장 (최민수 팀장)", type: "출장", event_date: "2026-07-18", day: "18", mon: "JUL", time: "3일간", created_at: "" },
   { id: "5", title: "NMPA 본심사 자료 제출", type: "제출", event_date: "2026-07-22", day: "22", mon: "JUL", time: "오후 5:00", created_at: "" },
   { id: "6", title: "월간 영업 전략 회의", type: "회의", event_date: "2026-07-25", day: "25", mon: "JUL", time: "오전 10:00", created_at: "" },
+];
+
+export const demoInquiries: Inquiry[] = [
+  { id: "1", name: "김도현", company: "메디팜 코리아", email: "dohyun.kim@medipharm.co.kr", phone: "010-2345-6789", type: "제휴·유통", message: "귀사의 태국·중국 유통 네트워크를 통한 당사 제품 수출 협업을 문의드립니다. 미팅 가능한 일정 회신 부탁드립니다.", status: "new", created_at: "2026-07-11T09:20:00" },
+  { id: "2", name: "Sarah Chen", company: "Shanghai HealthLink", email: "sarah.chen@healthlink.cn", phone: "+86-21-8888-1234", type: "글로벌 진출", message: "We are interested in distributing Korean cosmetic-medical products in China. Please share your partnership terms.", status: "read", created_at: "2026-07-10T16:05:00" },
+  { id: "3", name: "박성우", company: "그린바이오", email: "sw.park@greenbio.kr", phone: "010-9876-5432", type: "의약품 허가", message: "의약품 인허가(RA) 컨설팅 견적을 요청드립니다. 품목은 점안액 2종입니다.", status: "replied", created_at: "2026-07-09T11:30:00" },
 ];

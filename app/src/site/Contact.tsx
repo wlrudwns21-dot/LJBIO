@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useLang } from "@/i18n/LangContext";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import SiteChrome from "./SiteChrome";
 
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -27,7 +28,7 @@ export default function Contact() {
     if (k === "name" || k === "email" || k === "message") setBad((b) => ({ ...b, [k]: false }));
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const nameBad = !form.name.trim();
     const eBad = !emailOk(form.email.trim());
@@ -47,6 +48,21 @@ export default function Contact() {
       return;
     }
     setErr("");
+    // Save to the portal so staff can see it (best effort — still show success).
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from("inquiries").insert({
+          name: form.name.trim(),
+          company: form.company.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          type: form.type,
+          message: form.message.trim(),
+        });
+      } catch {
+        /* ignore — inquiry still acknowledged */
+      }
+    }
     setDone(true);
   };
 

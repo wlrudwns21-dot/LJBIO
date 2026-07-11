@@ -6,9 +6,11 @@ import { roleLabel } from "@/lib/theme";
 import { SECTIONS, type SectionKey } from "./sections/registry";
 import { SectionNavContext } from "./nav";
 
-type Badges = Partial<Record<"chat" | "mail" | "approvals" | "hr" | "admin", number>>;
+type Badges = Partial<
+  Record<"chat" | "mail" | "approvals" | "hr" | "admin" | "inquiries", number>
+>;
 
-const DEMO_BADGES: Badges = { chat: 5, mail: 2, approvals: 3, hr: 2, admin: 3 };
+const DEMO_BADGES: Badges = { chat: 5, mail: 2, approvals: 3, hr: 2, admin: 3, inquiries: 1 };
 
 function useNavBadges(): Badges {
   const [b, setB] = useState<Badges>(isSupabaseConfigured ? {} : DEMO_BADGES);
@@ -17,13 +19,14 @@ function useNavBadges(): Badges {
     (async () => {
       const count = async (table: string, filter: (q: any) => any) =>
         (await filter(supabase.from(table).select("*", { count: "exact", head: true }))).count || 0;
-      const [mail, approvals, hr, admin] = await Promise.all([
+      const [mail, approvals, hr, admin, inquiries] = await Promise.all([
         count("mails", (q) => q.eq("folder", "inbox").eq("unread", true)),
         count("approvals", (q) => q.eq("status", "pending")),
         count("leaves", (q) => q.eq("status", "pending")),
         count("profiles", (q) => q.eq("status", "pending")),
+        count("inquiries", (q) => q.eq("status", "new")),
       ]);
-      setB({ mail, approvals, hr, admin });
+      setB({ mail, approvals, hr, admin, inquiries });
     })().catch(() => {});
   }, []);
   return b;
@@ -66,7 +69,7 @@ export default function PortalShell() {
     <div style={{ display: "flex", minHeight: "100vh" }}>
       {/* SIDEBAR */}
       <aside
-        className="app-sidebar"
+        className={"app-sidebar" + (drawer ? " open" : "")}
         style={{
           width: 250,
           flexShrink: 0,

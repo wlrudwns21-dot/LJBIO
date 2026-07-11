@@ -7,7 +7,8 @@ import type { Mail as MailRow } from "@/types/database";
 import {
   getGmailToken,
   connectGmail,
-  clearGmailToken,
+  refreshGmail,
+  disconnectGmail,
   listFolder,
   getMessage,
   markRead,
@@ -57,10 +58,40 @@ export default function Mail() {
   const connected = !!gmail;
 
   // Re-check the token whenever the logged-in user changes (prevents one user
-  // from seeing another's connected mailbox on a shared browser).
+  // from seeing another's mailbox on a shared browser). If there's no valid
+  // local token, ask the server to mint one — this is what keeps a connection
+  // alive across expiry and re-login (needs the gmail-auth Edge Function).
   useEffect(() => {
-    setGmail(getGmailToken(uid));
+    const local = getGmailToken(uid);
+    if (local) {
+      setGmail(local);
+      return;
+    }
+    if (!uid || !isSupabaseConfigured) {
+      setGmail(null);
+      return;
+    }
+    let cancelled = false;
+    refreshGmail(uid).then((t) => {
+      if (!cancelled) setGmail(t);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [uid]);
+
+  // Token rejected mid-use → try a silent server refresh before giving up.
+  async function recover() {
+    if (uid) {
+      const t = await refreshGmail(uid);
+      if (t) {
+        setGmail(t);
+        return;
+      }
+    }
+    setGmail(null);
+    flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+  }
 
   const [mails, setMails] = useState<MailItem[]>(demoMails as MailItem[]);
   const [mailFolder, setMailFolder] = useState<string>("inbox");
@@ -96,8 +127,7 @@ export default function Mail() {
       .catch((e) => {
         if (cancelled) return;
         if (isTokenExpired(e)) {
-          setGmail(null);
-          flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+          void recover();
         } else {
           flash("메일을 불러오지 못했습니다.");
         }
@@ -124,7 +154,7 @@ export default function Mail() {
     if (error) flash("연결 실패: " + error);
   }
   function disconnect() {
-    clearGmailToken();
+    void disconnectGmail();
     setGmail(null);
     setSelectedMailId(null);
     setMails(isSupabaseConfigured ? [] : (demoMails as MailItem[]));
@@ -136,7 +166,7 @@ export default function Mail() {
     listFolder(gmail.token, mailFolder)
       .then((list) => setMails(list as MailItem[]))
       .catch((e) => {
-        if (isTokenExpired(e)) setGmail(null);
+        if (isTokenExpired(e)) void recover();
       })
       .finally(() => setLoading(false));
   }
@@ -151,8 +181,7 @@ export default function Mail() {
       await downloadAttachment(gmail.token, messageId, att);
     } catch (e) {
       if (isTokenExpired(e)) {
-        setGmail(null);
-        flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+        void recover();
       } else {
         flash("첨부파일을 불러오지 못했습니다.");
       }
@@ -172,7 +201,7 @@ export default function Mail() {
         setMails((ms) => ms.map((m) => (m.id === id ? (full as MailItem) : m)));
         markRead(gmail.token, id).catch(() => {});
       } catch (e) {
-        if (isTokenExpired(e)) setGmail(null);
+        if (isTokenExpired(e)) void recover();
       }
       return;
     }
@@ -185,7 +214,7 @@ export default function Mail() {
     setMails((ms) => ms.map((m) => (m.id === id ? { ...m, starred: next } : m)));
     if (connected && gmail) {
       setStar(gmail.token, id, next).catch((e) => {
-        if (isTokenExpired(e)) setGmail(null);
+        if (isTokenExpired(e)) void recover();
       });
       return;
     }
@@ -197,7 +226,7 @@ export default function Mail() {
       setMails((ms) => ms.filter((m) => m.id !== id));
       setSelectedMailId(null);
       trash(gmail.token, id).catch((e) => {
-        if (isTokenExpired(e)) setGmail(null);
+        if (isTokenExpired(e)) void recover();
       });
       flash("메일을 휴지통으로 이동했습니다");
       return;
@@ -228,8 +257,7 @@ export default function Mail() {
         if (mailFolder === "sent") refresh();
       } catch (e) {
         if (isTokenExpired(e)) {
-          setGmail(null);
-          flash("Gmail 연결이 만료됐어요. 다시 연결해 주세요.");
+          void recover();
         } else {
           flash("메일 전송에 실패했습니다.");
         }

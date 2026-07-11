@@ -177,3 +177,13 @@ create policy mails_all on public.mails
 -- --- settings: read approved, write admin -----------------------------------
 create policy settings_select on public.settings for select using (public.is_approved());
 create policy settings_write  on public.settings for all using (public.is_admin()) with check (public.is_admin());
+
+-- --- inquiries: anyone submits (public form), approved staff manage ---------
+alter table public.inquiries enable row level security;
+create policy inquiries_insert on public.inquiries for insert to anon, authenticated with check (true);
+create policy inquiries_select on public.inquiries for select using (public.is_approved());
+create policy inquiries_update on public.inquiries for update using (public.is_approved());
+create policy inquiries_delete on public.inquiries for delete using (public.is_approved());
+
+-- --- gmail_accounts: RLS on, no client policies (Edge Function only) --------
+alter table public.gmail_accounts enable row level security;

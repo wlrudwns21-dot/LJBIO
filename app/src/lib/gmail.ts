@@ -87,6 +87,52 @@ export function clearGmailToken() {
   }
 }
 
+/* --------------------------------------- persistent connection (Edge Function)
+ * These talk to the `gmail-auth` Edge Function so a connection survives token
+ * expiry and re-login. If the function isn't deployed they fail quietly and
+ * the app falls back to the connect-each-time flow. */
+
+/** Store the Google refresh token server-side (called right after OAuth). */
+export async function storeGmailRefresh(refresh_token: string): Promise<void> {
+  try {
+    await supabase.functions.invoke("gmail-auth", {
+      body: { action: "connect", refresh_token },
+    });
+  } catch {
+    /* function not deployed yet — ignore */
+  }
+}
+
+/** Ask the server for a fresh access token; store & return it, or null. */
+export async function refreshGmail(userId: string): Promise<GmailToken | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("gmail-auth", {
+      body: { action: "refresh" },
+    });
+    if (error || !data?.access_token) return null;
+    const t: GmailToken = {
+      token: data.access_token,
+      email: data.email || "",
+      userId,
+      exp: Date.now() + 55 * 60 * 1000,
+    };
+    localStorage.setItem(TOKEN_KEY, JSON.stringify(t));
+    return t;
+  } catch {
+    return null;
+  }
+}
+
+/** Forget the connection everywhere (server + this browser). */
+export async function disconnectGmail(): Promise<void> {
+  clearGmailToken();
+  try {
+    await supabase.functions.invoke("gmail-auth", { body: { action: "disconnect" } });
+  } catch {
+    /* ignore */
+  }
+}
+
 /* ------------------------------------------------------------- OAuth connect */
 const SCOPES = [
   "email",

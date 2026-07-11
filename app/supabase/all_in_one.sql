@@ -240,6 +240,31 @@ create index if not exists idx_task_comments_stage on public.task_comments (stag
 create index if not exists idx_messages_conversation on public.messages (conversation_id);
 create index if not exists idx_mails_owner on public.mails (owner_id);
 create index if not exists idx_approvals_drafter on public.approvals (drafter_id);
+
+-- ---------------------------------------------------------------------------
+-- inquiries (고객 문의) — submitted from the public site's contact form
+-- ---------------------------------------------------------------------------
+create table if not exists public.inquiries (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  company    text default '',
+  email      text default '',
+  phone      text default '',
+  type       text default '',
+  message    text not null,
+  status     text not null default 'new' check (status in ('new', 'read', 'replied', 'archived')),
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
+-- gmail_accounts — per-user Google refresh token (server-only; see 0007)
+-- ---------------------------------------------------------------------------
+create table if not exists public.gmail_accounts (
+  user_id       uuid primary key references auth.users (id) on delete cascade,
+  email         text,
+  refresh_token text not null,
+  updated_at    timestamptz not null default now()
+);
 -- ============================================================================
 -- LJ-BIO portal — Row Level Security + auth trigger
 -- ============================================================================
@@ -419,6 +444,16 @@ create policy mails_all on public.mails
 -- --- settings: read approved, write admin -----------------------------------
 create policy settings_select on public.settings for select using (public.is_approved());
 create policy settings_write  on public.settings for all using (public.is_admin()) with check (public.is_admin());
+
+-- --- inquiries: anyone submits (public form), approved staff manage ---------
+alter table public.inquiries enable row level security;
+create policy inquiries_insert on public.inquiries for insert to anon, authenticated with check (true);
+create policy inquiries_select on public.inquiries for select using (public.is_approved());
+create policy inquiries_update on public.inquiries for update using (public.is_approved());
+create policy inquiries_delete on public.inquiries for delete using (public.is_approved());
+
+-- --- gmail_accounts: RLS on, no client policies (Edge Function only) --------
+alter table public.gmail_accounts enable row level security;
 -- ============================================================================
 -- LJ-BIO portal — seed data (from the prototype). Runs as migration owner,
 -- so RLS is bypassed. Idempotent-ish: guarded by "on conflict do nothing"

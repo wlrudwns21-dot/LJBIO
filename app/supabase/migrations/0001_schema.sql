@@ -240,3 +240,28 @@ create index if not exists idx_task_comments_stage on public.task_comments (stag
 create index if not exists idx_messages_conversation on public.messages (conversation_id);
 create index if not exists idx_mails_owner on public.mails (owner_id);
 create index if not exists idx_approvals_drafter on public.approvals (drafter_id);
+
+-- ---------------------------------------------------------------------------
+-- inquiries (고객 문의) — submitted from the public site's contact form
+-- ---------------------------------------------------------------------------
+create table if not exists public.inquiries (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  company    text default '',
+  email      text default '',
+  phone      text default '',
+  type       text default '',
+  message    text not null,
+  status     text not null default 'new' check (status in ('new', 'read', 'replied', 'archived')),
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
+-- gmail_accounts — per-user Google refresh token (server-only; see 0007)
+-- ---------------------------------------------------------------------------
+create table if not exists public.gmail_accounts (
+  user_id       uuid primary key references auth.users (id) on delete cascade,
+  email         text,
+  refresh_token text not null,
+  updated_at    timestamptz not null default now()
+);
