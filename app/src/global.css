@@ -115,8 +115,18 @@ a {
     opacity: 0.4;
   }
 }
+/* opacity-only fade for section roots — must NOT leave a transform, or the
+   element becomes a containing block that traps position:fixed modals */
+@keyframes fadeonly {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 .fade {
-  animation: fadein 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: fadeonly 0.4s ease both;
 }
 .modalwrap {
   animation: fadein 0.3s ease both;
