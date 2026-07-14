@@ -154,9 +154,9 @@ export default function Docs() {
     if (!c.template_url) return;
     void downloadAttachment(
       attFrom(c.template_name || c.name + "_계약서", c.template_url),
-    ).then((ok) => {
-      if (ok) flash(c.name + " 계약서를 다운로드합니다");
-      else flash("양식 파일을 찾을 수 없습니다");
+    ).then((r) => {
+      if (r.ok) flash(c.name + " 계약서를 다운로드합니다");
+      else flash("다운로드 실패: " + (r.error || "양식 파일을 찾을 수 없습니다"));
     });
   }
 

@@ -96,14 +96,16 @@ export default function Partners() {
   const segName = (id: string | null) => segments.find((s) => s.id === id)?.name || "미분류";
 
   // 거래처 카드에서 문서 칩을 눌러 바로 다운로드
-  function downloadSlot(p: Partner, slot: DocSlot) {
+  async function downloadSlot(p: Partner, slot: DocSlot) {
     const files = asFiles((p.docs || {})[slot]).filter((f) => f && (f.url || f.path));
     if (!files.length) {
       flash("내려받을 파일이 없습니다. 거래처를 열어 파일을 업로드해 주세요.");
       return;
     }
-    files.forEach((f) => void downloadAttachment(f));
-    flash(files.length + "개 파일을 내려받았습니다");
+    const results = await Promise.all(files.map((f) => downloadAttachment(f)));
+    const fail = results.find((r) => !r.ok);
+    if (fail) flash("다운로드 실패: " + (fail.error || "알 수 없는 오류"));
+    else flash(files.length + "개 파일을 내려받았습니다");
   }
 
   const filters: [string, string][] = [

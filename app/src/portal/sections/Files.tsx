@@ -237,8 +237,8 @@ export default function Files() {
   }
 
   function download(f: FileRow) {
-    downloadAttachment(attFrom(f.name, f.storage_path)).then((ok) => {
-      if (!ok) flash("이 문서에는 내려받을 파일이 없습니다");
+    downloadAttachment(attFrom(f.name, f.storage_path)).then((r) => {
+      if (!r.ok) flash("다운로드 실패: " + (r.error || "알 수 없는 오류"));
     });
   }
 

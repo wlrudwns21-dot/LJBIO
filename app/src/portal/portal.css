@@ -139,11 +139,12 @@
   .g-files {
     grid-template-columns: 1fr auto !important;
   }
+  /* 모바일: 파일명(1) + 관리 버튼(7)만 표시 — 다운로드 버튼이 반드시 보이도록 */
+  .g-files > :nth-child(2),
   .g-files > :nth-child(3),
   .g-files > :nth-child(4),
   .g-files > :nth-child(5),
-  .g-files > :nth-child(6),
-  .g-files > :nth-child(7) {
+  .g-files > :nth-child(6) {
     display: none !important;
   }
   .g-members {

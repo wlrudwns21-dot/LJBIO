@@ -377,7 +377,7 @@ export default function Admin() {
                   verticalAlign: "middle",
                 }}
               >
-                v2 · 한글파일 지원
+                v3 · 모바일 다운로드
               </span>
             </h3>
             <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 3, lineHeight: 1.55 }}>
