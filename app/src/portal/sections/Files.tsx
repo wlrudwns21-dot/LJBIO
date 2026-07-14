@@ -1,10 +1,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { isMaster, downloadFile } from "@/lib/access";
+import { isMaster } from "@/lib/access";
+import { storeUpload, storedValue, attFrom, downloadAttachment } from "@/lib/storage";
 import { useToast } from "../ui";
 import { demoFiles, demoSegments, demoMe, demoPartners, demoMembers } from "../data/demo";
-import type { FileRow, Segment, Attachment } from "@/types/database";
+import type { FileRow, Segment } from "@/types/database";
 
 /** 문서 유형 — '거래계약'은 거래처별, '일반재무'는 태그로 구분합니다. */
 const CATEGORIES = ["거래계약", "일반재무", "인허가", "수출서류", "규정", "견적"];
@@ -60,20 +61,11 @@ function fmtSize(bytes: number): string {
   if (bytes >= 1024) return Math.round(bytes / 1024) + " KB";
   return bytes + " B";
 }
-function readAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result || ""));
-    r.onerror = () => resolve("");
-    r.readAsDataURL(file);
-  });
-}
-
 type Upload = {
   saveName: string;
   ext: string;
   size: string;
-  dataUrl: string;
+  file: File;
   category: string;
   segId: string;
   partner: string;
@@ -160,17 +152,16 @@ export default function Files() {
   );
 
   /* ---------------------------------------------------------- upload */
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files && e.target.files[0];
     e.target.value = ""; // allow re-picking the same file
     if (!f) return; // 파일이 없으면 아무 것도 만들지 않습니다 (빈 문서 방지)
-    const dataUrl = await readAsDataURL(f);
     const seg = (segFilter !== "전체" ? segFilter : segments[0]?.id) || "wholesale";
     setUpload({
       saveName: f.name,
       ext: extFromName(f.name),
       size: fmtSize(f.size),
-      dataUrl,
+      file: f,
       category: "거래계약",
       segId: seg,
       partner: partnerNames[0] || "",
@@ -199,6 +190,8 @@ export default function Files() {
       grade === 1
         ? Array.from(new Set([...upload.allowed, meEmail].filter(Boolean)))
         : [];
+    // 파일 내용을 Storage에 업로드하고 경로만 DB에 저장 (데모면 data URL)
+    const att = await storeUpload(upload.file, "files");
     const nf: FileRow = {
       id: "f" + Date.now(),
       name,
@@ -207,7 +200,7 @@ export default function Files() {
       seg_id: upload.segId,
       size: upload.size,
       uploader: me.name,
-      storage_path: upload.dataUrl || null,
+      storage_path: storedValue(att) || null,
       partner,
       tag,
       grade,
@@ -244,8 +237,9 @@ export default function Files() {
   }
 
   function download(f: FileRow) {
-    const att: Attachment = { name: f.name, url: f.storage_path || undefined };
-    if (!downloadFile(att)) flash("이 문서에는 내려받을 파일이 없습니다");
+    downloadAttachment(attFrom(f.name, f.storage_path)).then((ok) => {
+      if (!ok) flash("이 문서에는 내려받을 파일이 없습니다");
+    });
   }
 
   function saveGrade() {

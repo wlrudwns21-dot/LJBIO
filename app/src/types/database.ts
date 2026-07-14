@@ -103,7 +103,10 @@ export interface Message {
 
 export interface Attachment {
   name: string;
+  /** 레거시/데모: base64 data URL. */
   url?: string;
+  /** Supabase Storage 경로(현재 방식). */
+  path?: string;
 }
 
 export interface Mail {

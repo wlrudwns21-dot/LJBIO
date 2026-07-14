@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { theme, roleLabel, roleStyle, fmtKRW } from "@/lib/theme";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster } from "@/lib/access";
+import { storeUpload, storedValue, migrateAllToStorage } from "@/lib/storage";
 import { useToast } from "../ui";
 
 function NoAccess({ label }: { label: string }) {
@@ -80,6 +81,26 @@ export default function Admin() {
     demoContractTypes.map((name, i) => ({ id: "ct" + i, name })),
   );
   const [ctNewName, setCtNewName] = useState("");
+  const [migrating, setMigrating] = useState(false);
+  const [migrateMsg, setMigrateMsg] = useState("");
+
+  async function runMigration() {
+    if (migrating) return;
+    setMigrating(true);
+    setMigrateMsg("이전을 시작합니다…");
+    try {
+      const res = await migrateAllToStorage((m) => setMigrateMsg(m));
+      setMigrateMsg(
+        `완료 · ${res.moved}개 파일을 Storage로 이전했습니다` +
+          (res.failed ? ` (실패 ${res.failed}개)` : ""),
+      );
+      flash("파일 Storage 이전 완료");
+    } catch {
+      setMigrateMsg("이전 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
+    } finally {
+      setMigrating(false);
+    }
+  }
   const [sealImg, setSealImg] = useState<string | null>(() => {
     try {
       return localStorage.getItem("ljbio_seal");
@@ -253,25 +274,22 @@ export default function Admin() {
   }
   function onCtTemplate(id: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files && e.target.files[0];
+    e.target.value = "";
     if (!file) return;
-    const r = new FileReader();
-    r.onload = () => {
-      const url = String(r.result);
+    void (async () => {
+      const att = await storeUpload(file, "contracts");
+      const url = storedValue(att);
       setContractTypes((c) =>
-        c.map((x) =>
-          x.id === id ? { ...x, template_url: url, template_name: file.name } : x,
-        ),
+        c.map((x) => (x.id === id ? { ...x, template_url: url, template_name: file.name } : x)),
       );
-      void persist(() =>
+      await persist(() =>
         supabase
           .from("contract_types")
           .update({ template_url: url, template_name: file.name })
           .eq("id", id),
       );
       flash("계약서 양식을 업로드했습니다");
-    };
-    r.readAsDataURL(file);
-    e.target.value = "";
+    })();
   }
   function clearCtTemplate(id: string) {
     setContractTypes((c) =>
@@ -326,6 +344,57 @@ export default function Admin() {
 
   return (
     <div className="fade" style={{ maxWidth: 1160, margin: "0 auto" }}>
+      {/* 파일 저장소 이전 (마스터 전용) */}
+      {meMaster && (
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid rgba(12,15,13,0.07)",
+            borderRadius: 16,
+            padding: "18px 22px",
+            marginBottom: 22,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <h3 style={{ fontSize: 15.5, fontWeight: 700 }}>📦 파일을 Storage로 이전</h3>
+            <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 3, lineHeight: 1.55 }}>
+              기존에 DB에 저장돼 있던 문서·첨부(사업자등록증·통장사본·결재 첨부·계약서 양식·문서관리
+              파일)를 Supabase Storage로 옮깁니다. DB 용량을 아끼고 로딩이 빨라집니다.
+              <b> 먼저 0011_storage.sql을 실행</b>해 저장소 버킷을 만든 뒤 눌러주세요. 여러 번 눌러도
+              안전합니다(이미 옮긴 파일은 건너뜀).
+            </div>
+            {migrateMsg && (
+              <div style={{ marginTop: 8, fontSize: 12.5, color: migrating ? "#C6803A" : "#3E8E68", fontWeight: 600 }}>
+                {migrating ? "⏳ " : "✓ "}
+                {migrateMsg}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={runMigration}
+            disabled={migrating}
+            className="pbtn"
+            style={{
+              padding: "11px 20px",
+              border: "none",
+              borderRadius: 10,
+              background: migrating ? "#9AA29C" : "linear-gradient(110deg,#0E7B4E,#46D08A)",
+              color: "#fff",
+              fontSize: 13.5,
+              fontWeight: 600,
+              cursor: migrating ? "default" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {migrating ? "이전 중…" : "지금 이전"}
+          </button>
+        </div>
+      )}
+
       {/* 가입 승인 대기 */}
       <div
         style={{

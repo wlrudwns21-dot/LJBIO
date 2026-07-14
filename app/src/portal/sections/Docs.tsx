@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { attFrom, downloadAttachment } from "@/lib/storage";
 import { useToast } from "../ui";
 import { demoContractTypes } from "../data/demo";
 
@@ -151,13 +152,12 @@ export default function Docs() {
 
   function downloadTemplate(c: CtTemplate) {
     if (!c.template_url) return;
-    const a = document.createElement("a");
-    a.href = c.template_url;
-    a.download = c.template_name || c.name + "_계약서";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    flash(c.name + " 계약서를 다운로드합니다");
+    void downloadAttachment(
+      attFrom(c.template_name || c.name + "_계약서", c.template_url),
+    ).then((ok) => {
+      if (ok) flash(c.name + " 계약서를 다운로드합니다");
+      else flash("양식 파일을 찾을 수 없습니다");
+    });
   }
 
   const dm = DOC_META[docType];

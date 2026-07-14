@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { isMaster, DEFAULT_CEO, downloadFile } from "@/lib/access";
+import { isMaster, DEFAULT_CEO } from "@/lib/access";
+import { storeUpload, downloadAttachment } from "@/lib/storage";
 import { useToast } from "../ui";
 import { demoApprovals, demoSegments, demoMe, demoMembers } from "../data/demo";
 import type { Approval, Segment, ApprovalStep, Attachment } from "@/types/database";
@@ -197,17 +198,7 @@ export default function Approvals() {
     const picked = Array.from(e.target.files || []);
     e.target.value = "";
     if (!picked.length) return;
-    const added = await Promise.all(
-      picked.map(
-        (f) =>
-          new Promise<Attachment>((res) => {
-            const r = new FileReader();
-            r.onload = () => res({ name: f.name, url: String(r.result || "") });
-            r.onerror = () => res({ name: f.name });
-            r.readAsDataURL(f);
-          }),
-      ),
-    );
+    const added = await Promise.all(picked.map((f) => storeUpload(f, "approvals")));
     setEditor((ed) => (ed ? { ...ed, attachments: [...ed.attachments, ...added] } : ed));
   }
 
@@ -1551,9 +1542,9 @@ function ApprovalDetail({
                     >
                       {att.name}
                     </span>
-                    {att.url && (
+                    {(att.url || att.path) && (
                       <button
-                        onClick={() => downloadFile(att)}
+                        onClick={() => void downloadAttachment(att)}
                         className="gbtn"
                         style={{
                           padding: "6px 12px",

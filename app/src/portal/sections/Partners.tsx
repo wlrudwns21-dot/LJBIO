@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { asFiles, downloadFile } from "@/lib/access";
+import { asFiles } from "@/lib/access";
+import { storeUpload, downloadAttachment } from "@/lib/storage";
 import { useToast } from "../ui";
 import { demoPartners, demoContractTypes, demoSegments } from "../data/demo";
 import type { Partner, Segment, ContractType, Attachment } from "@/types/database";
@@ -63,18 +64,8 @@ const CHIP_DEFS: [DocSlot, string][] = [
   ["bankbook", "통장사본"],
 ];
 
-function readAll(files: File[]): Promise<Attachment[]> {
-  return Promise.all(
-    files.map(
-      (f) =>
-        new Promise<Attachment>((res) => {
-          const r = new FileReader();
-          r.onload = () => res({ name: f.name, url: String(r.result || "") });
-          r.onerror = () => res({ name: f.name });
-          r.readAsDataURL(f);
-        }),
-    ),
-  );
+function uploadAll(files: File[]): Promise<Attachment[]> {
+  return Promise.all(files.map((f) => storeUpload(f, "partners")));
 }
 
 async function persist(fn: () => PromiseLike<unknown>) {
@@ -106,12 +97,12 @@ export default function Partners() {
 
   // 거래처 카드에서 문서 칩을 눌러 바로 다운로드
   function downloadSlot(p: Partner, slot: DocSlot) {
-    const files = asFiles((p.docs || {})[slot]).filter((f) => f && f.url);
+    const files = asFiles((p.docs || {})[slot]).filter((f) => f && (f.url || f.path));
     if (!files.length) {
       flash("내려받을 파일이 없습니다. 거래처를 열어 파일을 업로드해 주세요.");
       return;
     }
-    files.forEach((f) => downloadFile(f));
+    files.forEach((f) => void downloadAttachment(f));
     flash(files.length + "개 파일을 내려받았습니다");
   }
 
@@ -170,7 +161,7 @@ export default function Partners() {
     const picked = Array.from(e.target.files || []);
     e.target.value = ""; // 같은 파일 다시 선택 가능 + 추가 첨부
     if (!picked.length) return;
-    const added = await readAll(picked);
+    const added = await uploadAll(picked);
     setEditor((ed) =>
       ed ? { ...ed, docs: { ...ed.docs, [slot]: [...ed.docs[slot], ...added] } } : ed,
     );
@@ -422,7 +413,7 @@ export default function Partners() {
                 {CHIP_DEFS.map(([k, label]) => {
                   const files = asFiles(docs[k]);
                   const has = files.length > 0;
-                  const dlable = has && files.some((f) => f && f.url);
+                  const dlable = has && files.some((f) => f && (f.url || f.path));
                   return (
                     <span
                       key={k}
@@ -901,9 +892,9 @@ export default function Partners() {
                           >
                             {d.name}
                           </span>
-                          {d.url && (
+                          {(d.url || d.path) && (
                             <button
-                              onClick={() => downloadFile(d)}
+                              onClick={() => void downloadAttachment(d)}
                               className="gbtn"
                               title="다운로드"
                               style={{
