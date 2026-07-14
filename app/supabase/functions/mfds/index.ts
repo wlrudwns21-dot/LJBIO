@@ -46,6 +46,26 @@ Deno.serve(async (req) => {
     const key = rawKey.includes("%") ? rawKey : encodeURIComponent(rawKey);
 
     const body = await req.json().catch(() => ({}));
+
+    // ---- 연결 진단: 후보 주소들을 실제 호출해 상태·응답 원문을 반환 ----
+    if (body?.diag && Array.isArray(body?.paths)) {
+      const out: { path: string; status: number; body: string }[] = [];
+      for (const p of (body.paths as string[]).slice(0, 10)) {
+        if (!/^(\d{7}\/)?[A-Za-z0-9_]+\/[A-Za-z0-9_]+$/.test(String(p))) continue;
+        const full = /^\d{7}\//.test(p) ? p : "1471000/" + p;
+        try {
+          const r = await fetch(
+            `https://apis.data.go.kr/${full}?serviceKey=${key}&type=json&numOfRows=1&pageNo=1`,
+          );
+          const t = await r.text();
+          out.push({ path: p, status: r.status, body: t.slice(0, 300) });
+        } catch (e) {
+          out.push({ path: p, status: 0, body: String((e as Error)?.message ?? e).slice(0, 200) });
+        }
+      }
+      return json({ ok: true, diag: out });
+    }
+
     let path = String(body?.path ?? "");
     // 허용 형식: "서비스/오퍼레이션"(식약처 기본) 또는 "기관코드/서비스/오퍼레이션"
     // (예: 공정거래위원회 리콜 = 1130000/...)

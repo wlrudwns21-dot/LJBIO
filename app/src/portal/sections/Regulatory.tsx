@@ -20,6 +20,20 @@ type Field = {
   params: string[];
 };
 
+/** 정부 API는 개편 시 끝의 버전 숫자만 올라갑니다(예: Service06/…Inq05 → Service07/…Inq06).
+ *  최신 버전(12)부터 자동으로 훑어 맞는 버전을 찾고, 성공한 주소는 기억합니다. */
+const pad2 = (n: number) => String(n).padStart(2, "0");
+function gen(svc: string, op: string, org?: string): string[] {
+  const out: string[] = [];
+  for (let v = 12; v >= 2; v--) {
+    out.push(`${svc}${pad2(v)}/${op}${pad2(v - 1)}`); // Service06/op05 형
+    out.push(`${svc}${pad2(v)}/${op}${pad2(v)}`); // Service02/op02 형
+  }
+  out.push(`${svc}01/${op}`);
+  out.push(`${svc}/${op}`);
+  return org ? out.map((p) => `${org}/${p}`) : out;
+}
+
 type Source = {
   key: string;
   label: string;
@@ -43,12 +57,7 @@ const SOURCES: Source[] = [
     label: "의약품 허가",
     icon: "💊",
     desc: "의약품 제품(품목) 허가정보 — 허가번호·허가일·취소여부",
-    candidates: [
-      "DrugPrdtPrmsnInfoService06/getDrugPrdtPrmsnDtlInq05",
-      "DrugPrdtPrmsnInfoService05/getDrugPrdtPrmsnDtlInq04",
-      "DrugPrdtPrmsnInfoService04/getDrugPrdtPrmsnDtlInq03",
-      "DrugPrdtPrmsnInfoService03/getDrugPrdtPrmsnDtlInq02",
-    ],
+    candidates: gen("DrugPrdtPrmsnInfoService", "getDrugPrdtPrmsnDtlInq"),
     itemParams: ["item_name"],
     entpParams: ["entp_name"],
     fields: [
@@ -62,11 +71,7 @@ const SOURCES: Source[] = [
     label: "의료기기 허가",
     icon: "🩺",
     desc: "의료기기 제품(품목) 허가정보 — 허가번호·등급·허가일자",
-    candidates: [
-      "MdeqPrdlstInfoService02/getMdeqPrdlstInq01",
-      "MdeqPrdlstInfoService01/getMdeqPrdlstInq",
-      "MdeqPrdlstInfoService/getMdeqPrdlstInq",
-    ],
+    candidates: gen("MdeqPrdlstInfoService", "getMdeqPrdlstInq"),
     itemParams: ["itemName", "item_name", "ITEM_NAME"],
     entpParams: ["entpName", "entp_name", "ENTP_NAME"],
     fields: [
@@ -82,11 +87,7 @@ const SOURCES: Source[] = [
     risk: true,
     feed: true,
     desc: "식약처 의약품 회수·판매중지 정보 — 회수사유·등급·명령일",
-    candidates: [
-      "MdcinRtrvlSleStpgeInfoService03/getMdcinRtrvlSleStpgeItem02",
-      "MdcinRtrvlSleStpgeInfoService02/getMdcinRtrvlSleStpgeItem01",
-      "MdcinRtrvlSleStpgeInfoService/getMdcinRtrvlSleStpgeItem",
-    ],
+    candidates: gen("MdcinRtrvlSleStpgeInfoService", "getMdcinRtrvlSleStpgeItem"),
     itemParams: ["Prduct", "item_name"],
     entpParams: ["Entrps", "entp_name"],
     fields: [
@@ -103,8 +104,8 @@ const SOURCES: Source[] = [
     feed: true,
     desc: "공정거래위원회 의약품 리콜정보 — 리콜 사유·유형·일자",
     candidates: [
+      ...gen("MdcineRecallInfoService", "getMdcineRecallInfo", "1130000"),
       "1130000/MdcineRecallInfoService2/getMdcineRecallInfo02",
-      "1130000/MdcineRecallInfoService/getMdcineRecallInfo",
       "1130000/RecallInfoMdcineService/getRecallInfoMdcine",
     ],
     itemParams: ["prdctNm", "item_name", "Prduct"],
@@ -121,12 +122,7 @@ const SOURCES: Source[] = [
     risk: true,
     feed: true,
     desc: "식약처 의약품 행정처분 정보 — 처분명·위반내용·처분일",
-    candidates: [
-      "MdcinExaathrService05/getMdcinExaathrList04",
-      "MdcinExaathrService04/getMdcinExaathrList03",
-      "MdcinExaathrService03/getMdcinExaathrList02",
-      "MdcinExaathrService01/getMdcinExaathrList",
-    ],
+    candidates: gen("MdcinExaathrService", "getMdcinExaathrList"),
     itemParams: ["item_name", "ITEM_NAME"],
     entpParams: ["entp_name", "ENTP_NAME"],
     fields: [
@@ -143,10 +139,8 @@ const SOURCES: Source[] = [
     feed: true,
     desc: "의약품 생산·수입·공급 중단 보고 정보",
     candidates: [
-      "MdcinStopReportInfoService/getMdcinStopReportList",
-      "DrugPrdcStpService/getDrugPrdcStpItem",
-      "DrugPrdcStpInfoService/getDrugPrdcStpInfoList",
-      "MdcinPrdcStpService/getMdcinPrdcStpList",
+      ...gen("MdcinStopReportInfoService", "getMdcinStopReportList"),
+      ...gen("DrugPrdcStpService", "getDrugPrdcStpItem"),
     ],
     itemParams: ["item_name", "itemName", "Prduct"],
     entpParams: ["entp_name", "entpName", "Entrps"],
@@ -162,9 +156,8 @@ const SOURCES: Source[] = [
     risk: true,
     desc: "의약품 공급부족 정보 — 부족 사유·기간",
     candidates: [
-      "MdcinShtgInfoService/getMdcinShtgItem",
-      "DrugShtgInfoService/getDrugShtgInfoList",
-      "MdcinSplyShtgInfoService/getMdcinSplyShtgList",
+      ...gen("MdcinShtgInfoService", "getMdcinShtgItem"),
+      ...gen("DrugShtgInfoService", "getDrugShtgInfoList"),
     ],
     itemParams: ["item_name", "itemName", "Prduct"],
     entpParams: ["entp_name", "entpName", "Entrps"],
@@ -178,11 +171,7 @@ const SOURCES: Source[] = [
     label: "생산·수입실적",
     icon: "🏭",
     desc: "의약품 생산·수입실적 현황 (생산: 백만원 · 수입: 달러)",
-    candidates: [
-      "MdcinPrdctnImportAcmsltService02/getMdcinPrdctnImportrstList02",
-      "MdcinPrdctnImportAcmsltService01/getMdcinPrdctnImportrstList01",
-      "MdcinPrdctnImportAcmsltService/getMdcinPrdctnImportrstList",
-    ],
+    candidates: gen("MdcinPrdctnImportAcmsltService", "getMdcinPrdctnImportrstList"),
     itemParams: ["item_name", "itemName"],
     entpParams: ["entp_name", "entpName"],
     fields: [
@@ -331,6 +320,8 @@ async function querySource(
     } catch (e) {
       lastErr = (e as Error).message;
     }
+    // 인증키·호출한도 문제는 버전을 바꿔도 소용없으니 즉시 중단
+    if (/SERVICE\s*_?KEY|REGISTERED|LIMITED|MFDS_API_KEY|unauthorized/i.test(lastErr)) break;
   }
   return { status: "error", items: [], total: null, error: lastErr };
 }
@@ -465,6 +456,26 @@ export default function Regulatory() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+  const [diag, setDiag] = useState<{ path: string; status: number; body: string }[] | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  /** 현재 탭의 API 주소 후보를 실제 호출해 정부 서버 응답 원문을 확인 */
+  async function runDiag() {
+    if (!requireLive()) return;
+    setDiagLoading(true);
+    setDiag(null);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke("mfds", {
+        body: { diag: true, paths: tab.candidates },
+      });
+      if (fnErr) throw new Error(fnErr.message);
+      const res = data as { diag?: { path: string; status: number; body: string }[] };
+      setDiag(res?.diag || []);
+    } catch (e) {
+      setDiag([{ path: "(진단 호출 실패)", status: 0, body: (e as Error).message }]);
+    }
+    setDiagLoading(false);
+  }
 
   /* 최신 이슈 자동 로드 (페이지 진입 시 1회) */
   useEffect(() => {
@@ -885,6 +896,7 @@ export default function Regulatory() {
                     setTotal(null);
                     setError("");
                     setSearched(false);
+                    setDiag(null);
                   }}
                   style={{
                     padding: "8px 14px",
@@ -980,8 +992,62 @@ export default function Regulatory() {
                 </div>
               ) : (
                 <div style={{ marginTop: 8, color: "#5A5C65" }}>
-                  ▸ 이 항목의 API 주소가 갱신됐을 수 있습니다. data.go.kr 활용신청 상세의{" "}
-                  <b>요청주소(End Point)</b> 화면을 캡처해 보내주시면 바로 맞춰드립니다.
+                  ▸ 아래 <b>연결 진단</b>을 누르면 정부 서버가 실제로 뭐라고 답하는지 확인됩니다. 결과
+                  화면을 캡처해 보내주시면 바로 맞춰드립니다.
+                </div>
+              )}
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={runDiag}
+                  disabled={diagLoading}
+                  className="gbtn"
+                  style={{
+                    padding: "8px 15px",
+                    border: "1px solid rgba(12,15,13,0.2)",
+                    borderRadius: 8,
+                    background: "#fff",
+                    color: "#3A3C45",
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {diagLoading ? "진단 중…" : "🔧 연결 진단"}
+                </button>
+              </div>
+              {diag && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {diag.map((d, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        background: "#fff",
+                        border: "1px solid rgba(12,15,13,0.1)",
+                        borderRadius: 8,
+                        padding: "9px 12px",
+                      }}
+                    >
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: "#3A3C45" }}>
+                        {d.path}{" "}
+                        <span style={{ color: d.status === 200 ? "#3E8E68" : "#C4553E" }}>
+                          HTTP {d.status || "실패"}
+                        </span>
+                      </div>
+                      <pre
+                        style={{
+                          margin: "5px 0 0",
+                          fontSize: 11,
+                          color: "#5A5C65",
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-all",
+                          maxHeight: 90,
+                          overflow: "auto",
+                        }}
+                      >
+                        {d.body}
+                      </pre>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
