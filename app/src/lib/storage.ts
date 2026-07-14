@@ -34,8 +34,18 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([bytes as unknown as BlobPart], { type: mime });
 }
 
+// Storage 오브젝트 키는 ASCII만 허용됩니다(한글 파일명은 "Invalid key" 오류).
+// 원본 파일명(한글 포함)은 DB의 name 필드에 그대로 보존되고, 여기선 키만 안전화합니다.
 function safeName(name: string): string {
-  return (name || "file").replace(/[^\w.\-가-힣]+/g, "_").slice(-120);
+  const m = /\.([A-Za-z0-9]{1,8})$/.exec(name || "");
+  const ext = m ? "." + m[1].toLowerCase() : "";
+  let base = (m ? (name || "").slice(0, m.index) : name || "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-") // 비ASCII·공백·특수문자 → '-'
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .slice(0, 48);
+  if (!/[A-Za-z0-9]/.test(base)) base = ""; // 영문/숫자가 하나도 없으면 'file' 사용
+  return (base || "file") + ext;
 }
 
 /** Storage에 업로드. { path, error } 반환 (실패 시 path=null, error=사유) */
