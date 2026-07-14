@@ -47,6 +47,69 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
 
+    const PATH_RE = /^(\d{7}\/)?[A-Za-z0-9_]+\/[A-Za-z0-9_]+$/;
+    const withOrg = (p: string) => (/^\d{7}\//.test(p) ? p : "1471000/" + p);
+    const buildQs = (params: Record<string, string | number>) => {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params ?? {})) {
+        if (v !== undefined && v !== null && String(v) !== "") qs.set(k, String(v));
+      }
+      if (!qs.has("type")) qs.set("type", "json");
+      if (!qs.has("numOfRows")) qs.set("numOfRows", "20");
+      if (!qs.has("pageNo")) qs.set("pageNo", "1");
+      return qs;
+    };
+    const xmlMsg = (text: string) =>
+      /<returnAuthMsg>([^<]+)<\/returnAuthMsg>/.exec(text)?.[1] ||
+      /<resultMsg>([^<]+)<\/resultMsg>/.exec(text)?.[1] ||
+      /<errMsg>([^<]+)<\/errMsg>/.exec(text)?.[1] ||
+      text.slice(0, 160);
+    const KEY_ERR = /SERVICE\s*_?KEY|REGISTERED|LIMITED/i;
+    // data.go.kr 표준 응답에서 성공 여부 판단
+    const isSuccess = (js: unknown): { ok: boolean; msg: string } => {
+      const d = js as Record<string, unknown>;
+      const resp = (d?.response ?? d) as Record<string, unknown>;
+      const header = (resp?.header ?? d?.header ?? {}) as Record<string, unknown>;
+      const bodyPart = (resp?.body ?? resp) as Record<string, unknown>;
+      const code = String(header?.resultCode ?? "");
+      const msg = String(header?.resultMsg ?? "");
+      let items: unknown = bodyPart?.items ?? [];
+      if (items && !Array.isArray(items)) items = (items as Record<string, unknown>).item ?? items;
+      const n = Array.isArray(items) ? items.length : items ? 1 : 0;
+      return { ok: code === "00" || n > 0 || /no\s*_?data/i.test(msg), msg: msg || code };
+    };
+
+    // ---- 스캔: 후보 주소들을 서버에서 순차 시도, 첫 성공을 반환 ----
+    if (body?.scan && Array.isArray(body?.paths)) {
+      const params = (body?.params ?? {}) as Record<string, string | number>;
+      const qs = buildQs(params);
+      const errors: string[] = [];
+      for (const p of (body.paths as string[]).slice(0, 60)) {
+        if (!PATH_RE.test(String(p))) continue;
+        try {
+          const r = await fetch(`https://apis.data.go.kr/${withOrg(p)}?serviceKey=${key}&${qs}`);
+          const text = await r.text();
+          try {
+            const js = JSON.parse(text);
+            const s = isSuccess(js);
+            if (s.ok) return json({ ok: true, path: p, data: js });
+            if (!errors.includes(s.msg)) errors.push(s.msg);
+            if (KEY_ERR.test(s.msg)) break;
+          } catch {
+            const m = xmlMsg(text);
+            if (!errors.includes(m)) errors.push(m);
+            if (KEY_ERR.test(m)) break;
+          }
+        } catch (e) {
+          errors.push(String((e as Error)?.message ?? e).slice(0, 120));
+        }
+      }
+      return json({
+        ok: false,
+        error: errors.slice(0, 3).join(" / ") || "모든 후보 주소가 실패했습니다",
+      });
+    }
+
     // ---- 연결 진단: 후보 주소들을 실제 호출해 상태·응답 원문을 반환 ----
     if (body?.diag && Array.isArray(body?.paths)) {
       const out: { path: string; status: number; body: string }[] = [];

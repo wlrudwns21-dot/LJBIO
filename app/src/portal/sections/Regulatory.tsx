@@ -4,7 +4,7 @@ import { useToast } from "../ui";
 
 /**
  * 인허가 조회 — 식약처(MFDS)·공정거래위원회 공공데이터 통합 검색
- *  · 최신 이슈 동향: 리콜·회수·행정처분·공급중단 최신 5건 자동 표시
+ *  · 최신 이슈 동향: 회수·행정처분·공급중단 최신 5건 자동 표시
  *  · 통합 인사이트: 한 번 검색으로 8개 데이터소스 동시 조회 → 위험신호 요약
  *  · 개별 조회: 소스별 맞춤 검색 필드 + 페이지네이션
  * Edge Function(mfds)을 통해 호출합니다(인증키는 서버에만 보관).
@@ -32,6 +32,22 @@ function gen(svc: string, op: string, org?: string): string[] {
   out.push(`${svc}01/${op}`);
   out.push(`${svc}/${op}`);
   return org ? out.map((p) => `${org}/${p}`) : out;
+}
+
+/** 서비스명이 확정된 경우: 오퍼레이션 이름·버전 접미사만 탐색
+ *  (예: MdcinSuplyLackService03 → getMdcinSuplyLackList03/02/3/2/무접미사) */
+function opsFor(svc: string, ...opBases: string[]): string[] {
+  const suffixes: string[] = [];
+  const m = /^(.*?)(\d+)$/.exec(svc);
+  if (m) {
+    const v = parseInt(m[2], 10);
+    for (const s of [pad2(v), String(v), pad2(v - 1), String(v - 1)])
+      if (!suffixes.includes(s)) suffixes.push(s);
+  }
+  suffixes.push("");
+  const out: string[] = [];
+  for (const ob of opBases) for (const s of suffixes) out.push(`${svc}/${ob}${s}`);
+  return out;
 }
 
 type Source = {
@@ -71,7 +87,17 @@ const SOURCES: Source[] = [
     label: "의료기기 허가",
     icon: "🩺",
     desc: "의료기기 제품(품목) 허가정보 — 허가번호·등급·허가일자",
-    candidates: gen("MdeqPrdlstInfoService", "getMdeqPrdlstInq"),
+    // 2026-07 식약처 공지: 의료기기 품목허가 → MdlpPrdlstPrmisnInfoService05로 변경
+    candidates: [
+      ...opsFor(
+        "MdlpPrdlstPrmisnInfoService05",
+        "getMdlpPrdlstPrmisnInfoList",
+        "getMdlpPrdlstPrmisnList",
+        "getMdlpPrdlstPrmisnInfoInq",
+      ),
+      ...gen("MdlpPrdlstPrmisnInfoService", "getMdlpPrdlstPrmisnInfoList"),
+      ...gen("MdeqPrdlstInfoService", "getMdeqPrdlstInq"),
+    ],
     itemParams: ["itemName", "item_name", "ITEM_NAME"],
     entpParams: ["entpName", "entp_name", "ENTP_NAME"],
     fields: [
@@ -87,32 +113,21 @@ const SOURCES: Source[] = [
     risk: true,
     feed: true,
     desc: "식약처 의약품 회수·판매중지 정보 — 회수사유·등급·명령일",
-    candidates: gen("MdcinRtrvlSleStpgeInfoService", "getMdcinRtrvlSleStpgeItem"),
+    // 사용자 확인(2026-07): MdcinRtrvlSleStpgeInfoService04
+    candidates: [
+      ...opsFor(
+        "MdcinRtrvlSleStpgeInfoService04",
+        "getMdcinRtrvlSleStpgeItem",
+        "getMdcinRtrvlSleStpgeList",
+      ),
+      ...gen("MdcinRtrvlSleStpgeInfoService", "getMdcinRtrvlSleStpgeItem"),
+    ],
     itemParams: ["Prduct", "item_name"],
     entpParams: ["Entrps", "entp_name"],
     fields: [
       { key: "item", label: "제품명", placeholder: "예: ○○정", params: ["Prduct", "item_name"] },
       { key: "entp", label: "업체명", placeholder: "예: ○○제약", params: ["Entrps", "entp_name"] },
       { key: "resn", label: "회수사유", placeholder: "예: 품질부적합", params: ["Rtrvl_Resn", "RTRVL_RESN", "rtrvlResn"] },
-    ],
-  },
-  {
-    key: "ftcRecall",
-    label: "공정위 리콜",
-    icon: "📢",
-    risk: true,
-    feed: true,
-    desc: "공정거래위원회 의약품 리콜정보 — 리콜 사유·유형·일자",
-    candidates: [
-      ...gen("MdcineRecallInfoService", "getMdcineRecallInfo", "1130000"),
-      "1130000/MdcineRecallInfoService2/getMdcineRecallInfo02",
-      "1130000/RecallInfoMdcineService/getRecallInfoMdcine",
-    ],
-    itemParams: ["prdctNm", "item_name", "Prduct"],
-    entpParams: ["bsnmNm", "entp_name", "Entrps"],
-    fields: [
-      { key: "item", label: "제품명", placeholder: "예: ○○정", params: ["prdctNm", "item_name"] },
-      { key: "entp", label: "업체명", placeholder: "예: ○○제약", params: ["bsnmNm", "entp_name"] },
     ],
   },
   {
@@ -138,9 +153,15 @@ const SOURCES: Source[] = [
     risk: true,
     feed: true,
     desc: "의약품 생산·수입·공급 중단 보고 정보",
+    // 사용자 확인(2026-07): MdcinPrdctnIncmeSuplyService2
     candidates: [
+      ...opsFor(
+        "MdcinPrdctnIncmeSuplyService2",
+        "getMdcinPrdctnIncmeSuplyList",
+        "getMdcinPrdctnIncmeSuplyItem",
+        "getMdcinPrdctnIncmeSuplyInfo",
+      ),
       ...gen("MdcinStopReportInfoService", "getMdcinStopReportList"),
-      ...gen("DrugPrdcStpService", "getDrugPrdcStpItem"),
     ],
     itemParams: ["item_name", "itemName", "Prduct"],
     entpParams: ["entp_name", "entpName", "Entrps"],
@@ -155,15 +176,41 @@ const SOURCES: Source[] = [
     icon: "⚠️",
     risk: true,
     desc: "의약품 공급부족 정보 — 부족 사유·기간",
+    // 사용자 확인(2026-07): MdcinSuplyLackService03
     candidates: [
-      ...gen("MdcinShtgInfoService", "getMdcinShtgItem"),
-      ...gen("DrugShtgInfoService", "getDrugShtgInfoList"),
+      ...opsFor(
+        "MdcinSuplyLackService03",
+        "getMdcinSuplyLackList",
+        "getMdcinSuplyLackItem",
+        "getMdcinSuplyLackInfoList",
+      ),
+      ...gen("MdcinSuplyLackService", "getMdcinSuplyLackList"),
     ],
     itemParams: ["item_name", "itemName", "Prduct"],
     entpParams: ["entp_name", "entpName", "Entrps"],
     fields: [
       { key: "item", label: "품목명", placeholder: "예: ○○주사", params: ["item_name", "itemName"] },
       { key: "entp", label: "업체명", placeholder: "예: ○○제약", params: ["entp_name", "entpName"] },
+    ],
+  },
+  {
+    key: "clinical",
+    label: "임상시험 정보",
+    icon: "🧪",
+    desc: "의약품 임상시험 계획 승인 상세정보 — 시험제목·의뢰자·승인일",
+    // 사용자 확인(2026-07): ClncExamPlanDtlService2
+    candidates: opsFor(
+      "ClncExamPlanDtlService2",
+      "getClncExamPlanDtlList",
+      "getClncExamPlanDtlItem",
+      "getClncExamPlanDtlInq",
+    ),
+    itemParams: ["item_name", "itemName", "goods_name"],
+    entpParams: ["entp_name", "entpName", "apply_entp_name"],
+    fields: [
+      { key: "item", label: "제품명(시험약)", placeholder: "예: ○○정", params: ["item_name", "goods_name"] },
+      { key: "entp", label: "의뢰자(제약사)", placeholder: "예: ○○제약", params: ["entp_name", "apply_entp_name"] },
+      { key: "title", label: "시험제목 키워드", placeholder: "예: 제2상", params: ["clinic_exam_title", "CLINIC_EXAM_TITLE"] },
     ],
   },
   {
@@ -204,10 +251,12 @@ const LABELS: Record<string, string> = {
   INDUTY: "업종", BIZRNO: "사업자번호", MNFCTUR_YM: "제조년월",
   prdctNm: "제품명", bsnmNm: "업체명", recallPblancDt: "리콜공표일",
   recallSe: "리콜유형", flawCn: "결함내용", rtrvlPlanCn: "회수계획",
+  CLINIC_EXAM_TITLE: "시험제목", APPLY_ENTP_NAME: "의뢰자", APPROVAL_TIME: "승인일",
+  GOODS_NAME: "제품명", LAB_NAME: "실시기관", CLINIC_STEP_NAME: "임상단계",
 };
 
-const TITLE_KEYS = ["ITEM_NAME", "PRDUCT", "Prduct", "PRDLST_NM", "itemName", "ITEM_NM", "prduct", "prdctNm"];
-const ENTP_KEYS = ["ENTP_NAME", "ENTRPS", "entpName", "BSSH_NM", "entrps", "bsnmNm"];
+const TITLE_KEYS = ["ITEM_NAME", "PRDUCT", "Prduct", "PRDLST_NM", "itemName", "ITEM_NM", "prduct", "prdctNm", "GOODS_NAME", "CLINIC_EXAM_TITLE"];
+const ENTP_KEYS = ["ENTP_NAME", "ENTRPS", "entpName", "BSSH_NM", "entrps", "bsnmNm", "APPLY_ENTP_NAME"];
 const DATE_KEYS = [
   "RECALL_COMMAND_DATE", "RTRVL_CMND_DE", "recallPblancDt", "ADM_DISPS_DATE",
   "LAST_SETTLE_DATE", "STOP_DE", "RPT_DE", "CANCEL_DATE", "ITEM_PERMIT_DATE", "PRMISN_DE",
@@ -263,7 +312,30 @@ type SourceResult = {
 
 type ParamSet = { params: string[]; value: string };
 
-/** 후보 주소 폴백 + 성공 주소 기억 포함 단일 소스 조회 */
+/** Edge Function 오류 응답 본문에서 실제 원인 추출 */
+async function fnErrMsg(fnErr: unknown): Promise<string> {
+  const err = fnErr as { message?: string; context?: Response };
+  let msg = err?.message || "조회 서버 호출 실패";
+  const ctx = err?.context;
+  if (ctx && typeof ctx.clone === "function") {
+    try {
+      const t = await ctx.clone().text();
+      try {
+        const j = JSON.parse(t) as { error?: string; message?: string; msg?: string };
+        msg = j.error || j.message || j.msg || msg;
+      } catch {
+        if (t) msg = t.slice(0, 200);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (/not\s*found|404/i.test(msg))
+    msg = "Supabase에 'mfds' Edge Function이 없습니다. 함수 이름이 mfds인지 확인하세요.";
+  return msg;
+}
+
+/** 후보 주소 자동 탐색(서버 1회 호출) + 성공 주소 기억. 구버전 함수엔 개별 호출로 폴백. */
 async function querySource(
   src: Source,
   paramSets: ParamSet[],
@@ -274,41 +346,48 @@ async function querySource(
   let candidates = [...src.candidates];
   try {
     const saved = localStorage.getItem(epKey);
-    if (saved && candidates.includes(saved))
-      candidates = [saved, ...candidates.filter((c) => c !== saved)];
+    if (saved) candidates = [saved, ...candidates.filter((c) => c !== saved)];
   } catch { /* ignore */ }
-  let lastErr = "";
-  for (const path of candidates) {
-    try {
-      const params: Record<string, string | number> = { pageNo, numOfRows };
-      for (const ps of paramSets) {
-        const v = (ps.value || "").trim();
-        if (v) for (const k of ps.params) params[k] = v;
+
+  const params: Record<string, string | number> = { pageNo, numOfRows };
+  for (const ps of paramSets) {
+    const v = (ps.value || "").trim();
+    if (v) for (const k of ps.params) params[k] = v;
+  }
+
+  // 1) 서버 스캔: 후보 전체를 함수 안에서 순차 시도 (호출 1번)
+  let scanErr = "";
+  try {
+    const { data, error: fnErr } = await supabase.functions.invoke("mfds", {
+      body: { scan: true, paths: candidates, params },
+    });
+    if (fnErr) {
+      scanErr = await fnErrMsg(fnErr);
+    } else {
+      const res = data as { ok?: boolean; path?: string; data?: unknown; error?: string };
+      if (res?.ok && res.path) {
+        try { localStorage.setItem(epKey, res.path); } catch { /* ignore */ }
+        const r = extract(res.data);
+        return { status: "ok", items: r.items, total: r.total };
       }
+      scanErr = res?.error || "모든 후보 주소가 실패했습니다";
+      // 스캔이 정상 동작해 실패를 확정했다면 그대로 반환
+      if (!/잘못된 경로/.test(scanErr)) {
+        return { status: "error", items: [], total: null, error: scanErr };
+      }
+    }
+  } catch (e) {
+    scanErr = (e as Error).message;
+  }
+
+  // 2) 레거시 폴백: 구버전 함수(스캔 미지원)면 후보별 개별 호출 (최대 8개)
+  let lastErr = scanErr;
+  for (const path of candidates.slice(0, 8)) {
+    try {
       const { data, error: fnErr } = await supabase.functions.invoke("mfds", {
         body: { path, params },
       });
-      if (fnErr) {
-        // FunctionsHttpError의 응답 본문에서 실제 원인 추출
-        let msg = fnErr.message || "조회 서버 호출 실패";
-        const ctx = (fnErr as { context?: Response }).context;
-        if (ctx && typeof ctx.clone === "function") {
-          try {
-            const t = await ctx.clone().text();
-            try {
-              const j = JSON.parse(t) as { error?: string; message?: string; msg?: string };
-              msg = j.error || j.message || j.msg || msg;
-            } catch {
-              if (t) msg = t.slice(0, 200);
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-        if (/not\s*found|404/i.test(msg))
-          msg = "Supabase에 'mfds' Edge Function이 없습니다. 함수 이름이 mfds인지 확인하세요.";
-        throw new Error(msg);
-      }
+      if (fnErr) throw new Error(await fnErrMsg(fnErr));
       const res = data as { ok?: boolean; data?: unknown; error?: string };
       if (!res?.ok) throw new Error(res?.error || "API 오류");
       const r = extract(res.data);
@@ -320,7 +399,7 @@ async function querySource(
     } catch (e) {
       lastErr = (e as Error).message;
     }
-    // 인증키·호출한도 문제는 버전을 바꿔도 소용없으니 즉시 중단
+    // 인증키·호출한도 문제는 주소를 바꿔도 소용없으니 즉시 중단
     if (/SERVICE\s*_?KEY|REGISTERED|LIMITED|MFDS_API_KEY|unauthorized/i.test(lastErr)) break;
   }
   return { status: "error", items: [], total: null, error: lastErr };
@@ -629,7 +708,7 @@ export default function Regulatory() {
             }}
           >
             <div style={{ fontSize: 12.5, color: "#84908A", marginBottom: 12 }}>
-              품목명·업체명으로 허가 · 회수 · 리콜 · 행정처분 · 공급중단/부족 · 실적을 한 번에 조회합니다 ·
+              품목명·업체명으로 허가 · 회수 · 행정처분 · 공급중단/부족 · 임상 · 실적을 한 번에 조회합니다 ·
               출처: 식약처·공정위 공공데이터
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -687,7 +766,7 @@ export default function Regulatory() {
               >
                 {riskHits.length
                   ? `⚠️ 위험 신호 ${riskHits.length}개 소스에서 발견`
-                  : "✅ 회수·리콜·행정처분·공급중단/부족 이력이 조회되지 않았습니다"}
+                  : "✅ 회수·행정처분·공급중단/부족 이력이 조회되지 않았습니다"}
               </div>
               <div style={{ marginTop: 6, fontSize: 12.5, color: "#5A5C65", lineHeight: 1.6 }}>
                 {riskHits.length > 0 &&
@@ -792,7 +871,7 @@ export default function Regulatory() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 700 }}>📡 최신 이슈 동향</h3>
                 <span style={{ fontSize: 12, color: "#84908A" }}>
-                  리콜 · 회수 · 행정처분 · 공급중단 최신 등록 5건씩
+                  회수 · 행정처분 · 공급중단 최신 등록 5건씩
                 </span>
               </div>
               {!isSupabaseConfigured ? (
