@@ -41,7 +41,12 @@ function opsFor(svc: string, ...opBases: string[]): string[] {
   const m = /^(.*?)(\d+)$/.exec(svc);
   if (m) {
     const v = parseInt(m[2], 10);
-    for (const s of [pad2(v), String(v), pad2(v - 1), String(v - 1)])
+    for (const s of [
+      pad2(v), String(v),
+      pad2(v - 1), String(v - 1),
+      pad2(v + 1), String(v + 1),
+      "01", "1",
+    ])
       if (!suffixes.includes(s)) suffixes.push(s);
   }
   suffixes.push("");
@@ -65,6 +70,8 @@ type Source = {
   risk?: boolean;
   /** 최신 이슈 피드에 포함 */
   feed?: boolean;
+  /** 통합 인사이트에서 제외 (개별 조회 탭에는 유지) */
+  hideInsight?: boolean;
 };
 
 const SOURCES: Source[] = [
@@ -72,6 +79,7 @@ const SOURCES: Source[] = [
     key: "drug",
     label: "의약품 허가",
     icon: "💊",
+    feed: true,
     desc: "의약품 제품(품목) 허가정보 — 허가번호·허가일·취소여부",
     candidates: gen("DrugPrdtPrmsnInfoService", "getDrugPrdtPrmsnDtlInq"),
     itemParams: ["item_name"],
@@ -86,6 +94,7 @@ const SOURCES: Source[] = [
     key: "device",
     label: "의료기기 허가",
     icon: "🩺",
+    feed: true,
     desc: "의료기기 제품(품목) 허가정보 — 허가번호·등급·허가일자",
     // 2026-07 식약처 공지: 의료기기 품목허가 → MdlpPrdlstPrmisnInfoService05로 변경
     candidates: [
@@ -98,12 +107,12 @@ const SOURCES: Source[] = [
       ...gen("MdlpPrdlstPrmisnInfoService", "getMdlpPrdlstPrmisnInfoList"),
       ...gen("MdeqPrdlstInfoService", "getMdeqPrdlstInq"),
     ],
-    itemParams: ["itemName", "item_name", "ITEM_NAME"],
-    entpParams: ["entpName", "entp_name", "ENTP_NAME"],
+    itemParams: ["itemName", "item_name", "ITEM_NAME", "prdlst_nm", "PRDLST_NM", "prdlstNm"],
+    entpParams: ["entpName", "entp_name", "ENTP_NAME", "entrps_nm", "ENTRPS_NM", "bssh_nm"],
     fields: [
-      { key: "item", label: "품목명", placeholder: "예: 혈압계", params: ["itemName", "item_name"] },
-      { key: "entp", label: "업체명", placeholder: "예: 메디트", params: ["entpName", "entp_name"] },
-      { key: "no", label: "허가번호", placeholder: "예: 제허 12-345호", params: ["itemNoFullname", "item_no", "ITEM_NO"] },
+      { key: "item", label: "품목명", placeholder: "예: 조직수복용생체재료", params: ["itemName", "item_name", "prdlst_nm", "PRDLST_NM"] },
+      { key: "entp", label: "업체명", placeholder: "예: 메디트", params: ["entpName", "entp_name", "entrps_nm", "ENTRPS_NM"] },
+      { key: "no", label: "허가번호", placeholder: "예: 제허 12-345호", params: ["itemNoFullname", "item_no", "ITEM_NO", "prdlst_cd"] },
     ],
   },
   {
@@ -135,7 +144,7 @@ const SOURCES: Source[] = [
     label: "행정처분",
     icon: "⚖️",
     risk: true,
-    feed: true,
+    hideInsight: true, // 통합 인사이트 제외 — 개별 조회에서만
     desc: "식약처 의약품 행정처분 정보 — 처분명·위반내용·처분일",
     candidates: gen("MdcinExaathrService", "getMdcinExaathrList"),
     itemParams: ["item_name", "ITEM_NAME"],
@@ -176,15 +185,17 @@ const SOURCES: Source[] = [
     icon: "⚠️",
     risk: true,
     desc: "의약품 공급부족 정보 — 부족 사유·기간",
-    // 사용자 확인(2026-07): MdcinSuplyLackService03
+    // 사용자 확인(2026-07): MdcinSuplyLackService03 (오퍼레이션명 자동 탐색)
     candidates: [
       ...opsFor(
         "MdcinSuplyLackService03",
         "getMdcinSuplyLackList",
-        "getMdcinSuplyLackItem",
         "getMdcinSuplyLackInfoList",
+        "getMdcinSuplyLackItem",
+        "getMdcinSuplyLackInfo",
+        "getMdcinSuplyLack",
+        "getSuplyLackList",
       ),
-      ...gen("MdcinSuplyLackService", "getMdcinSuplyLackList"),
     ],
     itemParams: ["item_name", "itemName", "Prduct"],
     entpParams: ["entp_name", "entpName", "Entrps"],
@@ -229,7 +240,13 @@ const SOURCES: Source[] = [
   },
 ];
 
-const FEED_SOURCES = SOURCES.filter((s) => s.feed);
+/** 최신 이슈 피드: 회수 → 공급중단 → 의약품 허가 → 의료기기 허가 순 */
+const FEED_ORDER = ["recall", "stop", "drug", "device"];
+const FEED_SOURCES = FEED_ORDER
+  .map((k) => SOURCES.find((s) => s.key === k && s.feed))
+  .filter(Boolean) as Source[];
+/** 통합 인사이트에 포함되는 소스 (행정처분 제외) */
+const INSIGHT_SOURCES = SOURCES.filter((s) => !s.hideInsight);
 
 /** 자주 나오는 영문 필드 → 한글 라벨 */
 const LABELS: Record<string, string> = {
@@ -260,7 +277,34 @@ const ENTP_KEYS = ["ENTP_NAME", "ENTRPS", "entpName", "BSSH_NM", "entrps", "bsnm
 const DATE_KEYS = [
   "RECALL_COMMAND_DATE", "RTRVL_CMND_DE", "recallPblancDt", "ADM_DISPS_DATE",
   "LAST_SETTLE_DATE", "STOP_DE", "RPT_DE", "CANCEL_DATE", "ITEM_PERMIT_DATE", "PRMISN_DE",
+  "APPROVAL_TIME", "RTRVL_CMND_DT", "REPORT_DE", "CRET_DTIME",
 ];
+
+/** 행에서 날짜를 숫자(YYYYMMDD)로 추출 — 정렬용. 없으면 0 */
+function dateNum(row: Row): number {
+  const raw = pick(row, DATE_KEYS);
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  return digits.length >= 8 ? Number(digits) : 0;
+}
+/** 최신순 정렬 (날짜 없는 행은 뒤로) */
+function sortLatest(items: Row[]): Row[] {
+  return [...items].sort((a, b) => dateNum(b) - dateNum(a));
+}
+
+/** 결과 검증: 일부 정부 API는 검색 파라미터를 무시하고 전체 목록을 반환합니다.
+ *  결과의 절반 이상이 검색어를 포함하지 않으면 '서버 검색 미적용'으로 판단하고
+ *  화면에서 검색어와 일치하는 행만 남깁니다. */
+function verifyFilter(items: Row[], terms: string[]): { rows: Row[]; applied: boolean } {
+  const t = terms.map((x) => (x || "").trim().toLowerCase()).filter(Boolean);
+  if (!t.length || !items.length) return { rows: items, applied: false };
+  const match = (r: Row) =>
+    t.every((term) =>
+      Object.values(r).some((v) => String(v ?? "").toLowerCase().includes(term)),
+    );
+  const hit = items.filter(match);
+  if (hit.length / items.length >= 0.5) return { rows: items, applied: false }; // 서버 검색 정상
+  return { rows: hit, applied: true };
+}
 const REASON_KEYS = ["RTRVL_RESN", "EXPOSE_CONT", "STOP_RESN", "flawCn", "ADM_DISPS_NAME", "recallSe"];
 
 const fld: CSSProperties = {
@@ -537,6 +581,7 @@ export default function Regulatory() {
   const [searched, setSearched] = useState(false);
   const [diag, setDiag] = useState<{ path: string; status: number; body: string }[] | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [filterNote, setFilterNote] = useState(false);
 
   /** 현재 탭의 API 주소 후보를 실제 호출해 정부 서버 응답 원문을 확인 */
   async function runDiag() {
@@ -556,14 +601,31 @@ export default function Regulatory() {
     setDiagLoading(false);
   }
 
-  /* 최신 이슈 자동 로드 (페이지 진입 시 1회) */
+  /* 최신 이슈 자동 로드 (페이지 진입 시 1회)
+     정부 API는 정렬 방향이 제각각이라, 첫 페이지 + 마지막 페이지를 함께 받아
+     날짜 기준 최신순으로 정렬한 뒤 상위 5건을 보여줍니다. */
   useEffect(() => {
     if (!isSupabaseConfigured || feedLoaded.current) return;
     feedLoaded.current = true;
     setFeedLoading(true);
     (async () => {
       const results = await Promise.all(
-        FEED_SOURCES.map(async (s) => [s.key, await querySource(s, [], 1, 5)] as const),
+        FEED_SOURCES.map(async (s) => {
+          const first = await querySource(s, [], 1, 20);
+          if (first.status !== "ok")
+            return [s.key, first] as const;
+          let items = first.items;
+          const total = first.total ?? items.length;
+          const lastPage = Math.ceil(total / 20);
+          if (lastPage > 1) {
+            const last = await querySource(s, [], lastPage, 20);
+            if (last.status === "ok") items = [...items, ...last.items];
+          }
+          return [
+            s.key,
+            { status: "ok", items: sortLatest(items).slice(0, 5), total } as SourceResult,
+          ] as const;
+        }),
       );
       setFeed(Object.fromEntries(results));
       setFeedLoading(false);
@@ -587,22 +649,32 @@ export default function Regulatory() {
     }
     setAggLoading(true);
     setAggDone(false);
-    setAgg(Object.fromEntries(SOURCES.map((s) => [s.key, { status: "idle", items: [], total: null }])));
-    const results = await Promise.all(
-      SOURCES.map(async (s) =>
-        [
-          s.key,
-          await querySource(
-            s,
-            [
-              { params: s.itemParams, value: item },
-              { params: s.entpParams, value: entp },
-            ],
-            1,
-            5,
-          ),
-        ] as const,
+    setAgg(
+      Object.fromEntries(
+        INSIGHT_SOURCES.map((s) => [s.key, { status: "idle", items: [], total: null }]),
       ),
+    );
+    const results = await Promise.all(
+      INSIGHT_SOURCES.map(async (s) => {
+        const r = await querySource(
+          s,
+          [
+            { params: s.itemParams, value: item },
+            { params: s.entpParams, value: entp },
+          ],
+          1,
+          20,
+        );
+        if (r.status !== "ok") return [s.key, r] as const;
+        // 서버가 검색을 무시한 경우 화면에서 검증·필터 (허수 위험신호 방지)
+        const v = verifyFilter(r.items, [item, entp]);
+        return [
+          s.key,
+          v.applied
+            ? ({ status: "ok", items: v.rows, total: v.rows.length } as SourceResult)
+            : r,
+        ] as const;
+      }),
     );
     setAgg(Object.fromEntries(results));
     setAggLoading(false);
@@ -619,13 +691,18 @@ export default function Regulatory() {
       setTotal(null);
     }
     setSearched(true);
+    if (!append) setFilterNote(false);
     const paramSets: ParamSet[] = tab.fields.map((f) => ({
       params: f.params,
       value: vals[tab.key + ":" + f.key] || "",
     }));
     const r = await querySource(tab, paramSets, pageNo, 20);
     if (r.status === "ok") {
-      setRows((prev) => (append ? [...prev, ...r.items] : r.items));
+      // 서버가 검색 조건을 무시했는지 검증 → 무시됐으면 화면에서 필터
+      const terms = paramSets.map((p) => p.value);
+      const v = verifyFilter(r.items, terms);
+      if (v.applied) setFilterNote(true);
+      setRows((prev) => (append ? [...prev, ...v.rows] : v.rows));
       setTotal(r.total);
       setPage(pageNo);
     } else {
@@ -652,8 +729,8 @@ export default function Regulatory() {
     }
   };
 
-  /* 인사이트 요약 */
-  const riskSources = SOURCES.filter((s) => s.risk);
+  /* 인사이트 요약 (행정처분 제외) */
+  const riskSources = INSIGHT_SOURCES.filter((s) => s.risk);
   const riskHits = riskSources
     .map((s) => ({ s, r: agg[s.key] }))
     .filter(({ r }) => r?.status === "ok" && (r.total ?? r.items.length) > 0);
@@ -789,7 +866,7 @@ export default function Regulatory() {
           {/* 소스별 요약 칩 */}
           {(aggLoading || aggDone) && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-              {SOURCES.map((s) => {
+              {INSIGHT_SOURCES.map((s) => {
                 const r = agg[s.key];
                 const n = cnt(r);
                 const err = r?.status === "error";
@@ -823,7 +900,7 @@ export default function Regulatory() {
 
           {/* 소스별 미리보기 (검색 결과) */}
           {aggDone &&
-            SOURCES.map((s) => {
+            INSIGHT_SOURCES.map((s) => {
               const r = agg[s.key];
               if (!r || r.status !== "ok" || r.items.length === 0) return null;
               return (
@@ -857,7 +934,7 @@ export default function Regulatory() {
                     </button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {r.items.slice(0, 3).map((row, i) => (
+                    {sortLatest(r.items).slice(0, 3).map((row, i) => (
                       <ResultCard key={i} row={row} compact />
                     ))}
                   </div>
@@ -871,7 +948,7 @@ export default function Regulatory() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 700 }}>📡 최신 이슈 동향</h3>
                 <span style={{ fontSize: 12, color: "#84908A" }}>
-                  회수 · 행정처분 · 공급중단 최신 등록 5건씩
+                  회수 · 공급중단 · 의약품/의료기기 허가 — 최신순 5건씩
                 </span>
               </div>
               {!isSupabaseConfigured ? (
@@ -976,6 +1053,7 @@ export default function Regulatory() {
                     setError("");
                     setSearched(false);
                     setDiag(null);
+                    setFilterNote(false);
                   }}
                   style={{
                     padding: "8px 14px",
@@ -1132,9 +1210,35 @@ export default function Regulatory() {
             </div>
           )}
 
+          {filterNote && (
+            <div
+              style={{
+                background: "#FFF7E8",
+                border: "1px solid rgba(198,128,58,0.28)",
+                borderRadius: 10,
+                padding: "11px 15px",
+                marginBottom: 12,
+                fontSize: 12.5,
+                color: "#8A5A16",
+                lineHeight: 1.5,
+              }}
+            >
+              ℹ️ 이 API가 검색 조건을 지원하지 않아, 받아온 결과 중 <b>검색어와 일치하는 항목만</b>{" "}
+              표시합니다. '더 불러오기'를 누르면 다음 페이지에서도 일치 항목을 계속 찾습니다.
+            </div>
+          )}
           {total != null && (
             <div style={{ fontSize: 13, color: "#5A5C65", marginBottom: 10 }}>
-              총 <b style={{ color: "#0E7B4E" }}>{total.toLocaleString()}</b>건
+              {filterNote ? (
+                <>
+                  표시 <b style={{ color: "#0E7B4E" }}>{rows.length.toLocaleString()}</b>건 (전체{" "}
+                  {total.toLocaleString()}건 중 일치분)
+                </>
+              ) : (
+                <>
+                  총 <b style={{ color: "#0E7B4E" }}>{total.toLocaleString()}</b>건
+                </>
+              )}
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1177,7 +1281,7 @@ export default function Regulatory() {
             </div>
           )}
 
-          {rows.length > 0 && total != null && rows.length < total && (
+          {searched && !error && total != null && page * 20 < total && (rows.length > 0 || filterNote) && (
             <div style={{ textAlign: "center", marginTop: 16 }}>
               <button
                 onClick={() => searchOne(page + 1, true)}
