@@ -211,6 +211,10 @@ export interface FileRow {
   partner?: string;
   /** 일반재무 등 자유 태그 */
   tag?: string;
+  /** 보안등급 1(기밀·제한) · 2(관리자) · 3(전체). 기본 3 */
+  grade?: number;
+  /** 기밀 1급 개별 열람 허용자(이메일 목록) */
+  allowed?: string[];
   created_at: string;
 }
 

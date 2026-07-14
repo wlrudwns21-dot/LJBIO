@@ -104,6 +104,17 @@ export default function Partners() {
   const segColor = (id: string | null) => segments.find((s) => s.id === id)?.color || "#84908A";
   const segName = (id: string | null) => segments.find((s) => s.id === id)?.name || "미분류";
 
+  // 거래처 카드에서 문서 칩을 눌러 바로 다운로드
+  function downloadSlot(p: Partner, slot: DocSlot) {
+    const files = asFiles((p.docs || {})[slot]).filter((f) => f && f.url);
+    if (!files.length) {
+      flash("내려받을 파일이 없습니다. 거래처를 열어 파일을 업로드해 주세요.");
+      return;
+    }
+    files.forEach((f) => downloadFile(f));
+    flash(files.length + "개 파일을 내려받았습니다");
+  }
+
   const filters: [string, string][] = [
     ["전체", "전체 거래처"],
     ["매출", "매출처"],
@@ -409,10 +420,21 @@ export default function Partners() {
               >
                 <span style={{ fontSize: 11.5, color: "#84908A", marginRight: 2 }}>문서</span>
                 {CHIP_DEFS.map(([k, label]) => {
-                  const has = asFiles(docs[k]).length > 0;
+                  const files = asFiles(docs[k]);
+                  const has = files.length > 0;
+                  const dlable = has && files.some((f) => f && f.url);
                   return (
                     <span
                       key={k}
+                      onClick={
+                        has
+                          ? (ev) => {
+                              ev.stopPropagation();
+                              downloadSlot(p, k);
+                            }
+                          : undefined
+                      }
+                      title={dlable ? label + " 다운로드" : undefined}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -421,12 +443,16 @@ export default function Partners() {
                         borderRadius: 20,
                         fontSize: 11.5,
                         fontWeight: 600,
+                        cursor: has ? "pointer" : "default",
                         ...(has
                           ? { background: "#E9F2EC", color: "#3E8E68" }
                           : { background: "#F0F1F0", color: "#9AA29C" }),
                       }}
                     >
-                      {has ? "✓" : "○"} {label}
+                      {has ? "⬇" : "○"} {label}
+                      {files.length > 1 && (
+                        <span style={{ opacity: 0.7 }}>({files.length})</span>
+                      )}
                     </span>
                   );
                 })}

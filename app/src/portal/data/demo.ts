@@ -168,9 +168,9 @@ export const demoFiles: FileRow[] = [
   { id: "2", name: "태국_필러_PackingList_20260714.xlsx", ext: "XLS", category: "수출서류", seg_id: "cosmexp", size: "184 KB", uploader: "정우성", storage_path: null, created_at: "2026-07-09" },
   { id: "3", name: "Commercial_Invoice_태국_5000ea.pdf", ext: "PDF", category: "수출서류", seg_id: "cosmexp", size: "96 KB", uploader: "최민수", storage_path: null, created_at: "2026-07-09" },
   { id: "4", name: "일본_화장품_라벨_가이드_2026.pdf", ext: "PDF", category: "규정", seg_id: "cosmexp", size: "5.1 MB", uploader: "한소희", storage_path: null, created_at: "2026-07-08" },
-  { id: "5", name: "2026_수출_표준계약서_템플릿.docx", ext: "DOC", category: "계약", seg_id: "pharmexp", size: "312 KB", uploader: "지경준", storage_path: null, created_at: "2026-07-06" },
+  { id: "5", name: "2026_수출_표준계약서_템플릿.docx", ext: "DOC", category: "계약", seg_id: "pharmexp", size: "312 KB", uploader: "지경준", storage_path: null, grade: 2, allowed: [], created_at: "2026-07-06" },
   { id: "6", name: "중국_헬스케어_공급_견적서.xlsx", ext: "XLS", category: "견적", seg_id: "deviceexp", size: "241 KB", uploader: "최민수", storage_path: null, created_at: "2026-07-05" },
-  { id: "7", name: "국내_의약품_공급계약_20260701.pdf", ext: "PDF", category: "계약", seg_id: "wholesale", size: "420 KB", uploader: "지경준", storage_path: null, created_at: "2026-07-01" },
+  { id: "7", name: "국내_의약품_공급계약_20260701.pdf", ext: "PDF", category: "거래계약", seg_id: "wholesale", size: "420 KB", uploader: "지경준", storage_path: null, grade: 1, allowed: ["minsu.choi@bio-lj.com"], partner: "서울종합약품 도매", created_at: "2026-07-01" },
   { id: "8", name: "유통ERP_구축_제안서_v2.pptx", ext: "DOC", category: "견적", seg_id: "itconsult", size: "3.8 MB", uploader: "지경준", storage_path: null, created_at: "2026-07-03" },
   { id: "9", name: "의약품_도매_거래처_단가표_3Q.xlsx", ext: "XLS", category: "견적", seg_id: "wholesale", size: "156 KB", uploader: "김서연", storage_path: null, created_at: "2026-06-30" },
 ];

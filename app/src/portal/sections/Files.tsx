@@ -3,11 +3,21 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster, downloadFile } from "@/lib/access";
 import { useToast } from "../ui";
-import { demoFiles, demoSegments, demoMe, demoPartners } from "../data/demo";
+import { demoFiles, demoSegments, demoMe, demoPartners, demoMembers } from "../data/demo";
 import type { FileRow, Segment, Attachment } from "@/types/database";
 
 /** 문서 유형 — '거래계약'은 거래처별, '일반재무'는 태그로 구분합니다. */
 const CATEGORIES = ["거래계약", "일반재무", "인허가", "수출서류", "규정", "견적"];
+
+/** 보안등급 — 1(기밀·제한) · 2(관리자) · 3(전체) */
+const GRADES: { g: number; label: string; short: string; bg: string; color: string; hint: string }[] = [
+  { g: 3, label: "기밀 3급 · 전체 열람", short: "3급", bg: "#E9F2EC", color: "#3E8E68", hint: "파일관리 접근 가능한 전체(팀장급 이상)가 열람합니다." },
+  { g: 2, label: "기밀 2급 · 관리자", short: "2급", bg: "#FFF1E0", color: "#C6803A", hint: "관리자(admin) 이상만 열람합니다." },
+  { g: 1, label: "기밀 1급 · 제한", short: "1급", bg: "#FDE8E8", color: "#D14343", hint: "마스터·대표와 아래에서 지정한 개별 인원만 열람합니다." },
+];
+const gradeMeta = (g?: number) => GRADES.find((x) => x.g === (g ?? 3)) || GRADES[0];
+
+type Member = { name: string; email: string; role?: string; is_ceo?: boolean };
 
 function extStyle(e: string) {
   return e === "PDF"
@@ -68,6 +78,8 @@ type Upload = {
   segId: string;
   partner: string;
   tag: string;
+  grade: number;
+  allowed: string[];
 };
 
 const fld: CSSProperties = {
@@ -87,14 +99,20 @@ export default function Files() {
   const me = profile ?? demoMe;
   const role = profile?.role ?? "admin"; // demo mode → admin
   const canAccess = role === "admin" || role === "manager";
-  const canDelete = isMaster(me); // 문서 삭제는 마스터(지경준)만
+  const meMaster = isMaster(me);
+  const meCeo = !!(profile as { is_ceo?: boolean } | null)?.is_ceo;
+  const meEmail = ((me as { email?: string }).email || "").toLowerCase();
+  const canDelete = meMaster; // 문서 삭제는 마스터(지경준)만
+  const canGrade = meMaster || role === "admin"; // 보안등급 변경은 관리자·마스터
   const [files, setFiles] = useState<FileRow[]>(demoFiles);
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
   const [partnerNames, setPartnerNames] = useState<string[]>(
     demoPartners.map((p) => p.name),
   );
+  const [members, setMembers] = useState<Member[]>(demoMembers as Member[]);
   const [segFilter, setSegFilter] = useState<string>("전체");
   const [upload, setUpload] = useState<Upload | null>(null);
+  const [secEdit, setSecEdit] = useState<{ id: string; grade: number; allowed: string[] } | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -108,8 +126,24 @@ export default function Files() {
       if (f) setFiles(f as FileRow[]);
       const { data: pt } = await supabase.from("partners").select("name").order("name");
       if (pt) setPartnerNames((pt as { name: string }[]).map((x) => x.name));
+      const { data: mm } = await supabase
+        .from("profiles")
+        .select("name,email,role,is_ceo")
+        .eq("status", "approved")
+        .order("created_at");
+      if (mm) setMembers(mm as Member[]);
     })().catch(() => {});
   }, []);
+
+  // 보안등급별 열람 권한 (파일관리 접근은 이미 팀장급 이상으로 제한됨)
+  function canView(f: FileRow): boolean {
+    const g = f.grade ?? 3;
+    if (g >= 3) return true;
+    if (g === 2) return meMaster || role === "admin";
+    // 기밀 1급
+    if (meMaster || meCeo) return true;
+    return (f.allowed || []).map((x) => String(x).toLowerCase()).includes(meEmail);
+  }
 
   const segColor = (id: string | null) =>
     segments.find((x) => x.id === id)?.color || "#84908A";
@@ -117,7 +151,9 @@ export default function Files() {
     segments.find((x) => x.id === id)?.name || "미분류";
 
   const chips = [{ id: "전체", name: "전체 부문", color: "#0C0F0D" }, ...segments];
-  const filtered = files.filter((f) => segFilter === "전체" || f.seg_id === segFilter);
+  const filtered = files.filter(
+    (f) => (segFilter === "전체" || f.seg_id === segFilter) && canView(f),
+  );
 
   /* ---------------------------------------------------------- upload */
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -135,6 +171,8 @@ export default function Files() {
       segId: seg,
       partner: partnerNames[0] || "",
       tag: "",
+      grade: 3,
+      allowed: [],
     });
   }
 
@@ -151,6 +189,12 @@ export default function Files() {
     }
     const partner = upload.category === "거래계약" ? upload.partner : "";
     const tag = upload.category === "일반재무" ? upload.tag.trim() : "";
+    const grade = upload.grade;
+    // 기밀 1급: 업로더 본인도 자동 포함(자기 문서를 못 보는 상황 방지)
+    const allowed =
+      grade === 1
+        ? Array.from(new Set([...upload.allowed, meEmail].filter(Boolean)))
+        : [];
     const nf: FileRow = {
       id: "f" + Date.now(),
       name,
@@ -162,6 +206,8 @@ export default function Files() {
       storage_path: upload.dataUrl || null,
       partner,
       tag,
+      grade,
+      allowed,
       created_at: new Date().toISOString().slice(0, 10),
     };
     setFiles((prev) => [nf, ...prev]);
@@ -181,6 +227,8 @@ export default function Files() {
             storage_path: nf.storage_path,
             partner,
             tag,
+            grade,
+            allowed,
           })
           .select()
           .single();
@@ -196,6 +244,17 @@ export default function Files() {
     if (!downloadFile(att)) flash("이 문서에는 내려받을 파일이 없습니다");
   }
 
+  function saveGrade() {
+    if (!secEdit) return;
+    const { id, grade } = secEdit;
+    const allowed = grade === 1 ? secEdit.allowed : [];
+    setFiles((prev) => prev.map((x) => (x.id === id ? { ...x, grade, allowed } : x)));
+    setSecEdit(null);
+    flash("보안등급을 변경했습니다");
+    if (isSupabaseConfigured)
+      supabase.from("files").update({ grade, allowed }).eq("id", id).then(() => {});
+  }
+
   function remove(f: FileRow) {
     if (!canDelete) return;
     if (!window.confirm(`'${f.name}' 문서를 삭제할까요? 되돌릴 수 없습니다.`)) return;
@@ -205,7 +264,7 @@ export default function Files() {
       supabase.from("files").delete().eq("id", f.id).then(() => {});
   }
 
-  const gridCols = "1fr 122px 92px 66px 84px 92px 84px";
+  const gridCols = "1fr 116px 84px 58px 76px 82px 112px";
 
   if (!canAccess) {
     return (
@@ -342,6 +401,7 @@ export default function Files() {
           const c = catStyle(f.category);
           const sc = segColor(f.seg_id);
           const badge = f.partner || f.tag;
+          const gm = gradeMeta(f.grade);
           return (
             <div
               key={f.id}
@@ -393,20 +453,40 @@ export default function Files() {
                   >
                     {f.name}
                   </span>
-                  {badge && (
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: 4,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <span
                       style={{
-                        display: "inline-block",
-                        marginTop: 3,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: f.partner ? "#6B45C9" : "#2A6FDB",
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        padding: "1px 7px",
+                        borderRadius: 5,
+                        background: gm.bg,
+                        color: gm.color,
                       }}
                     >
-                      {f.partner ? "🏢 " : "🏷 "}
-                      {badge}
+                      🔒 {gm.short}
                     </span>
-                  )}
+                    {badge && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: f.partner ? "#6B45C9" : "#2A6FDB",
+                        }}
+                      >
+                        {f.partner ? "🏢 " : "🏷 "}
+                        {badge}
+                      </span>
+                    )}
+                  </span>
                 </span>
               </span>
               <span style={{ fontSize: 12.5 }}>
@@ -473,6 +553,28 @@ export default function Files() {
                 >
                   ⬇
                 </button>
+                {canGrade && (
+                  <button
+                    onClick={() =>
+                      setSecEdit({ id: f.id, grade: f.grade ?? 3, allowed: f.allowed || [] })
+                    }
+                    className="gbtn"
+                    title="보안등급 변경"
+                    style={{
+                      padding: "6px 9px",
+                      border: "1px solid rgba(12,15,13,0.16)",
+                      borderRadius: 8,
+                      background: "#fff",
+                      color: "#5A5C65",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      lineHeight: 1,
+                    }}
+                  >
+                    🔒
+                  </button>
+                )}
                 {canDelete && (
                   <button
                     onClick={() => remove(f)}
@@ -655,6 +757,82 @@ export default function Files() {
                   />
                 </div>
               )}
+
+              {/* 보안등급 */}
+              <div>
+                <label style={lbl}>보안등급</label>
+                <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                  {GRADES.map((gr) => {
+                    const on = upload.grade === gr.g;
+                    return (
+                      <button
+                        key={gr.g}
+                        type="button"
+                        onClick={() => setUpload({ ...upload, grade: gr.g })}
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: 9,
+                          fontSize: 12.5,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          border: `1.5px solid ${on ? gr.color : "rgba(12,15,13,0.14)"}`,
+                          background: on ? gr.bg : "#fff",
+                          color: on ? gr.color : "#5A5C65",
+                        }}
+                      >
+                        🔒 기밀 {gr.g}급
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 11.5, color: "#84908A" }}>
+                  {gradeMeta(upload.grade).hint}
+                </div>
+                {upload.grade === 1 && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={lbl}>
+                      개별 열람 허용{" "}
+                      <span style={{ color: "#84908A", fontWeight: 500 }}>
+                        (마스터·대표는 자동 포함)
+                      </span>
+                    </label>
+                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
+                      {members
+                        .filter((m) => !isMaster(m) && !m.is_ceo)
+                        .map((m) => {
+                          const on = upload.allowed.includes(m.email);
+                          return (
+                            <button
+                              key={m.email}
+                              type="button"
+                              onClick={() =>
+                                setUpload({
+                                  ...upload,
+                                  allowed: on
+                                    ? upload.allowed.filter((x) => x !== m.email)
+                                    : [...upload.allowed, m.email],
+                                })
+                              }
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 20,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                border: `1.5px solid ${on ? "#0E7B4E" : "rgba(12,15,13,0.14)"}`,
+                                background: on ? "#0E7B4E" : "#fff",
+                                color: on ? "#fff" : "#4A4C55",
+                              }}
+                            >
+                              {on ? "✓ " : ""}
+                              {m.name}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div
               style={{
@@ -682,6 +860,160 @@ export default function Files() {
               </button>
               <button
                 onClick={confirmUpload}
+                className="pbtn"
+                style={{
+                  padding: "11px 24px",
+                  border: "none",
+                  borderRadius: 9,
+                  background: "linear-gradient(110deg,#0E7B4E,#46D08A)",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ 보안등급 변경 모달 ============ */}
+      {secEdit && (
+        <div
+          className="modalwrap"
+          onClick={() => setSecEdit(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 210,
+            background: "rgba(6,10,8,0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "center",
+            overflowY: "auto",
+            padding: "50px 18px",
+          }}
+        >
+          <div
+            className="modalbox"
+            onClick={(ev) => ev.stopPropagation()}
+            style={{ width: 480, maxWidth: "100%", background: "#fff", borderRadius: 18, overflow: "hidden" }}
+          >
+            <div
+              style={{
+                padding: "20px 26px",
+                borderBottom: "1px solid rgba(12,15,13,0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>🔒 보안등급 변경</h2>
+              <span
+                onClick={() => setSecEdit(null)}
+                style={{ cursor: "pointer", fontSize: 22, color: "#84908A", lineHeight: 1 }}
+              >
+                ×
+              </span>
+            </div>
+            <div style={{ padding: "22px 26px", display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {GRADES.map((gr) => {
+                  const on = secEdit.grade === gr.g;
+                  return (
+                    <button
+                      key={gr.g}
+                      type="button"
+                      onClick={() => setSecEdit({ ...secEdit, grade: gr.g })}
+                      style={{
+                        padding: "8px 14px",
+                        borderRadius: 9,
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: `1.5px solid ${on ? gr.color : "rgba(12,15,13,0.14)"}`,
+                        background: on ? gr.bg : "#fff",
+                        color: on ? gr.color : "#5A5C65",
+                      }}
+                    >
+                      🔒 기밀 {gr.g}급
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11.5, color: "#84908A" }}>{gradeMeta(secEdit.grade).hint}</div>
+              {secEdit.grade === 1 && (
+                <div>
+                  <label style={lbl}>
+                    개별 열람 허용{" "}
+                    <span style={{ color: "#84908A", fontWeight: 500 }}>(마스터·대표는 자동 포함)</span>
+                  </label>
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 8 }}>
+                    {members
+                      .filter((m) => !isMaster(m) && !m.is_ceo)
+                      .map((m) => {
+                        const on = secEdit.allowed.includes(m.email);
+                        return (
+                          <button
+                            key={m.email}
+                            type="button"
+                            onClick={() =>
+                              setSecEdit({
+                                ...secEdit,
+                                allowed: on
+                                  ? secEdit.allowed.filter((x) => x !== m.email)
+                                  : [...secEdit.allowed, m.email],
+                              })
+                            }
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: 20,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: `1.5px solid ${on ? "#0E7B4E" : "rgba(12,15,13,0.14)"}`,
+                              background: on ? "#0E7B4E" : "#fff",
+                              color: on ? "#fff" : "#4A4C55",
+                            }}
+                          >
+                            {on ? "✓ " : ""}
+                            {m.name}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div
+              style={{
+                padding: "16px 26px",
+                borderTop: "1px solid rgba(12,15,13,0.08)",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 10,
+              }}
+            >
+              <button
+                onClick={() => setSecEdit(null)}
+                className="gbtn"
+                style={{
+                  padding: "11px 20px",
+                  border: "1px solid rgba(12,15,13,0.14)",
+                  borderRadius: 9,
+                  background: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={saveGrade}
                 className="pbtn"
                 style={{
                   padding: "11px 24px",

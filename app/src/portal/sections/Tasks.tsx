@@ -129,6 +129,74 @@ export default function Tasks() {
     persist(() => supabase.from("tasks").update({ status }).eq("id", taskId));
   }
 
+  /* ------------------------------------------------------- 단계(스텝) 편집 */
+  async function addStage(taskId: string) {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const sort = task.stages.length;
+    const name = "새 단계 " + (sort + 1);
+    let stage: TaskStage & { comments: TaskComment[] } = {
+      id: genId(),
+      task_id: taskId,
+      name,
+      status: "todo" as StageStatus,
+      sort,
+      comments: [],
+    };
+    if (isSupabaseConfigured) {
+      try {
+        const { data } = await supabase
+          .from("task_stages")
+          .insert({ task_id: taskId, name, status: "todo", sort })
+          .select()
+          .single();
+        if (data) stage = { ...(data as TaskStage), comments: [] };
+      } catch {
+        /* ignore */
+      }
+    }
+    setTasks((prev) =>
+      prev.map((t) => (t.id !== taskId ? t : { ...t, stages: [...t.stages, stage] })),
+    );
+  }
+
+  function removeStage(taskId: string, idx: number) {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    if (task.stages.length <= 1) {
+      toast("단계는 최소 1개가 필요합니다");
+      return;
+    }
+    const stage = task.stages[idx];
+    if (!window.confirm(`'${stage.name}' 단계를 삭제할까요? 이 단계의 코멘트도 함께 삭제됩니다.`))
+      return;
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id !== taskId ? t : { ...t, stages: t.stages.filter((_, i) => i !== idx) },
+      ),
+    );
+    persist(() => supabase.from("task_stages").delete().eq("id", stage.id));
+  }
+
+  // 이름 편집: 입력 중에는 로컬만, 포커스 아웃 시 저장
+  function renameStage(taskId: string, idx: number, name: string) {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id !== taskId
+          ? t
+          : { ...t, stages: t.stages.map((s, i) => (i === idx ? { ...s, name } : s)) },
+      ),
+    );
+  }
+  function commitStage(taskId: string, idx: number) {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const stage = task.stages[idx];
+    persist(() =>
+      supabase.from("task_stages").update({ name: stage.name }).eq("id", stage.id),
+    );
+  }
+
   async function addComment(taskId: string, idx: number) {
     const key = taskId + ":" + idx;
     const text = (drafts[key] || "").trim();
@@ -425,6 +493,10 @@ export default function Tasks() {
           onStatus={(st) => setTaskStatus(sel.id, st)}
           onToggle={(idx) => cycleStage(sel.id, idx)}
           onSend={(idx) => addComment(sel.id, idx)}
+          onAddStage={() => addStage(sel.id)}
+          onRemoveStage={(idx) => removeStage(sel.id, idx)}
+          onRenameStage={(idx, name) => renameStage(sel.id, idx, name)}
+          onCommitStage={(idx) => commitStage(sel.id, idx)}
         />}
       </Modal>
 
@@ -540,6 +612,10 @@ function TaskDetail({
   onStatus,
   onToggle,
   onSend,
+  onAddStage,
+  onRemoveStage,
+  onRenameStage,
+  onCommitStage,
 }: {
   task: TaskFull;
   drafts: Record<string, string>;
@@ -550,6 +626,10 @@ function TaskDetail({
   onStatus: (st: TaskStatus) => void;
   onToggle: (idx: number) => void;
   onSend: (idx: number) => void;
+  onAddStage: () => void;
+  onRemoveStage: (idx: number) => void;
+  onRenameStage: (idx: number, name: string) => void;
+  onCommitStage: (idx: number) => void;
 }) {
   const p = priorityStyle(task.priority);
   const fs = fieldStyle(task.field);
@@ -649,9 +729,55 @@ function TaskDetail({
                   )}
                 </div>
                 <div style={{ flex: 1, paddingBottom: 22 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: done || doing ? "#0C0F0D" : "#84908A" }}>{s.name}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 9px", borderRadius: 20, background: c.bg, color: c.color }}>{ST_LABEL[s.status]}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      value={s.name}
+                      onChange={(e) => onRenameStage(idx, e.target.value)}
+                      onBlur={() => onCommitStage(idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      title="단계 이름 (클릭하여 수정)"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: done || doing ? "#0C0F0D" : "#84908A",
+                        border: "1px solid transparent",
+                        borderRadius: 7,
+                        padding: "4px 8px",
+                        marginLeft: -8,
+                        background: "transparent",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.border = "1px solid rgba(12,15,13,0.14)";
+                        e.target.style.background = "#fff";
+                      }}
+                      onBlurCapture={(e) => {
+                        e.target.style.border = "1px solid transparent";
+                        e.target.style.background = "transparent";
+                      }}
+                    />
+                    <span style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 9px", borderRadius: 20, background: c.bg, color: c.color, flexShrink: 0 }}>{ST_LABEL[s.status]}</span>
+                    <button
+                      onClick={() => onRemoveStage(idx)}
+                      title="단계 삭제"
+                      style={{
+                        flexShrink: 0,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 7,
+                        border: "1px solid rgba(196,85,62,0.28)",
+                        background: "#fff",
+                        color: "#C4553E",
+                        fontSize: 14,
+                        lineHeight: 1,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
                   {s.comments.length > 0 && (
                     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -697,6 +823,24 @@ function TaskDetail({
             );
           })}
         </div>
+        <button
+          onClick={onAddStage}
+          className="gbtn"
+          style={{
+            marginTop: 4,
+            marginLeft: 46,
+            padding: "9px 16px",
+            border: "1.5px dashed rgba(14,123,78,0.4)",
+            borderRadius: 10,
+            background: "rgba(14,123,78,0.04)",
+            color: "#0E7B4E",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          + 단계 추가
+        </button>
       </div>
     </div>
   );
