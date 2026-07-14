@@ -92,10 +92,30 @@ function triggerDownload(href: string, name: string) {
   a.remove();
 }
 
-/** 첨부 다운로드 — Storage 경로면 인증 다운로드, data URL이면 직접 저장 */
+const isMobile = () =>
+  typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+/** 첨부 다운로드 — 모바일은 서명 URL(다운로드 강제)로, 데스크톱은 blob 저장으로 */
 export async function downloadAttachment(att?: Attachment | null): Promise<boolean> {
   if (!att) return false;
+
   if (att.path && isSupabaseConfigured) {
+    if (isMobile()) {
+      // 사용자 제스처 유지를 위해 빈 탭을 먼저 열고, 서명 URL을 넣습니다.
+      const w = window.open("", "_blank");
+      const { data } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(att.path, 120, { download: att.name || true });
+      const url = data?.signedUrl;
+      if (url) {
+        if (w) w.location.href = url;
+        else window.location.href = url;
+        return true;
+      }
+      if (w) w.close();
+      return false;
+    }
+    // 데스크톱: 인증 다운로드 후 파일로 저장
     const { data, error } = await supabase.storage.from(BUCKET).download(att.path);
     if (error || !data) return false;
     const url = URL.createObjectURL(data);
@@ -103,7 +123,13 @@ export async function downloadAttachment(att?: Attachment | null): Promise<boole
     setTimeout(() => URL.revokeObjectURL(url), 4000);
     return true;
   }
+
   if (att.url) {
+    // 레거시 data URL
+    if (isMobile()) {
+      window.open(att.url, "_blank");
+      return true;
+    }
     triggerDownload(att.url, att.name);
     return true;
   }

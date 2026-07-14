@@ -363,7 +363,23 @@ export default function Admin() {
           }}
         >
           <div style={{ flex: 1, minWidth: 240 }}>
-            <h3 style={{ fontSize: 15.5, fontWeight: 700 }}>📦 파일을 Storage로 이전</h3>
+            <h3 style={{ fontSize: 15.5, fontWeight: 700 }}>
+              📦 파일을 Storage로 이전{" "}
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: 20,
+                  background: "#E9F2EC",
+                  color: "#3E8E68",
+                  marginLeft: 4,
+                  verticalAlign: "middle",
+                }}
+              >
+                v2 · 한글파일 지원
+              </span>
+            </h3>
             <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 3, lineHeight: 1.55 }}>
               기존에 DB에 저장돼 있던 문서·첨부(사업자등록증·통장사본·결재 첨부·계약서 양식·문서관리
               파일)를 Supabase Storage로 옮깁니다. DB 용량을 아끼고 로딩이 빨라집니다.
