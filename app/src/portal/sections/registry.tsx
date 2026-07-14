@@ -13,6 +13,7 @@ import Partners from "./Partners";
 import Files from "./Files";
 import Hr from "./Hr";
 import Admin from "./Admin";
+import Regulatory from "./Regulatory";
 
 export type SectionKey =
   | "dashboard"
@@ -27,6 +28,7 @@ export type SectionKey =
   | "finance"
   | "partners"
   | "files"
+  | "regulatory"
   | "hr"
   | "admin";
 
@@ -55,6 +57,7 @@ export const SECTIONS: SectionDef[] = [
   { key: "finance", icon: "📊", nav: "재무 현황", title: "재무 현황", sub: "사업 부문별 매출 · 주문 현황", Component: Finance },
   { key: "partners", icon: "🏢", nav: "거래처 관리", title: "거래처 관리", sub: "거래처 정보 · 사업자등록증 · 계약", Component: Partners },
   { key: "files", icon: "📁", nav: "파일 관리", title: "파일 관리", sub: "사업 부문별 업무 문서 저장소", Component: Files },
+  { key: "regulatory", icon: "🏛", nav: "인허가 조회", title: "인허가 조회", sub: "식약처 공공데이터 — 허가 · 회수 · 실적 조회", Component: Regulatory },
   { key: "hr", icon: "🏖", nav: "근태 · HR", title: "근태 · HR", sub: "휴가 및 출장 관리", badge: "hr", Component: Hr },
   { key: "admin", icon: "⚙", nav: "관리자", title: "관리자", sub: "계정 · 사업 부문 · 계약유형 · 직인 관리", badge: "admin", Component: Admin },
 ];
