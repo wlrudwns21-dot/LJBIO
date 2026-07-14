@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { asFiles, downloadFile } from "@/lib/access";
 import { useToast } from "../ui";
 import { demoPartners, demoContractTypes, demoSegments } from "../data/demo";
-import type { Partner, Segment, ContractType } from "@/types/database";
+import type { Partner, Segment, ContractType, Attachment } from "@/types/database";
 
-type DocSlot = "bizReg" | "bankbook" | "contract";
+// 계약서는 보안상 거래처에서 분리(문서관리로 이동) — 사업자등록증·통장사본만 첨부합니다.
+type DocSlot = "bizReg" | "bankbook";
+type EditorDocs = Record<DocSlot, Attachment[]>;
 
 type Editor = {
   id: string | null;
@@ -21,7 +24,7 @@ type Editor = {
   seg_id: string | null;
   contract_type: string;
   memo: string;
-  docs: Partner["docs"];
+  docs: EditorDocs;
   addingCt?: boolean;
   ctDraft?: string;
 };
@@ -52,15 +55,27 @@ function dealStyle(t: string) {
 }
 
 const DOC_DEFS: [DocSlot, string, string][] = [
-  ["bizReg", "사업자등록증", "사업자등록증 사본 (PDF·이미지)"],
-  ["bankbook", "통장 사본", "대금 정산 계좌 통장 사본"],
-  ["contract", "계약서", "체결된 계약서 원본/스캔"],
+  ["bizReg", "사업자등록증", "사업자등록증 사본 (PDF·이미지) · 복수 첨부 가능"],
+  ["bankbook", "통장 사본", "대금 정산 계좌 통장 사본 · 복수 첨부 가능"],
 ];
 const CHIP_DEFS: [DocSlot, string][] = [
   ["bizReg", "사업자등록증"],
   ["bankbook", "통장사본"],
-  ["contract", "계약서"],
 ];
+
+function readAll(files: File[]): Promise<Attachment[]> {
+  return Promise.all(
+    files.map(
+      (f) =>
+        new Promise<Attachment>((res) => {
+          const r = new FileReader();
+          r.onload = () => res({ name: f.name, url: String(r.result || "") });
+          r.onerror = () => res({ name: f.name });
+          r.readAsDataURL(f);
+        }),
+    ),
+  );
+}
 
 async function persist(fn: () => PromiseLike<unknown>) {
   if (isSupabaseConfigured) await fn();
@@ -112,7 +127,7 @@ export default function Partners() {
       seg_id: segments[0]?.id || "wholesale",
       contract_type: contractTypes[0] || "",
       memo: "",
-      docs: { bizReg: null, bankbook: null, contract: null },
+      docs: { bizReg: [], bankbook: [] },
     });
 
   const openPartner = (p: Partner) =>
@@ -131,30 +146,31 @@ export default function Partners() {
       seg_id: p.seg_id,
       contract_type: p.contract_type,
       memo: p.memo,
-      docs: { ...p.docs },
+      docs: {
+        bizReg: asFiles(p.docs?.bizReg),
+        bankbook: asFiles(p.docs?.bankbook),
+      },
     });
 
   const set = <K extends keyof Editor>(k: K, v: Editor[K]) =>
     setEditor((e) => (e ? { ...e, [k]: v } : e));
 
-  const onDoc = (slot: DocSlot) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    const store = (url: string) =>
-      setEditor((ed) =>
-        ed ? { ...ed, docs: { ...ed.docs, [slot]: { name: f.name, url } } } : ed,
-      );
-    if (/^image\//.test(f.type)) {
-      const r = new FileReader();
-      r.onload = () => store(String(r.result || ""));
-      r.readAsDataURL(f);
-    } else {
-      store("");
-    }
-    flash("문서를 첨부했습니다");
+  const onDoc = (slot: DocSlot) => async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = ""; // 같은 파일 다시 선택 가능 + 추가 첨부
+    if (!picked.length) return;
+    const added = await readAll(picked);
+    setEditor((ed) =>
+      ed ? { ...ed, docs: { ...ed.docs, [slot]: [...ed.docs[slot], ...added] } } : ed,
+    );
+    flash(added.length + "개 문서를 첨부했습니다");
   };
-  const removeDoc = (slot: DocSlot) =>
-    setEditor((ed) => (ed ? { ...ed, docs: { ...ed.docs, [slot]: null } } : ed));
+  const removeDoc = (slot: DocSlot, idx: number) =>
+    setEditor((ed) =>
+      ed
+        ? { ...ed, docs: { ...ed.docs, [slot]: ed.docs[slot].filter((_, i) => i !== idx) } }
+        : ed,
+    );
 
   const confirmAddCt = () => {
     if (!editor) return;
@@ -277,8 +293,8 @@ export default function Partners() {
         {list.map((p) => {
           const ds = dealStyle(p.deal_type);
           const sc = segColor(p.seg_id);
-          const docs = p.docs || { bizReg: null, bankbook: null, contract: null };
-          const docCount = CHIP_DEFS.filter(([k]) => docs[k]).length;
+          const docs = p.docs || { bizReg: null, bankbook: null };
+          const docCount = CHIP_DEFS.filter(([k]) => asFiles(docs[k]).length > 0).length;
           return (
             <div
               key={p.id}
@@ -393,7 +409,7 @@ export default function Partners() {
               >
                 <span style={{ fontSize: 11.5, color: "#84908A", marginRight: 2 }}>문서</span>
                 {CHIP_DEFS.map(([k, label]) => {
-                  const has = !!docs[k];
+                  const has = asFiles(docs[k]).length > 0;
                   return (
                     <span
                       key={k}
@@ -418,7 +434,7 @@ export default function Partners() {
                   className="mono"
                   style={{ marginLeft: "auto", fontSize: 11.5, color: "#84908A" }}
                 >
-                  {docCount}/3
+                  {docCount}/2
                 </span>
               </div>
             </div>
@@ -747,12 +763,11 @@ export default function Partners() {
               >
                 첨부 문서{" "}
                 <span style={{ color: "#9AA29C", fontWeight: 500 }}>
-                  (사업자등록증 · 통장사본 · 계약서)
+                  (사업자등록증 · 통장사본 — 각 여러 개 첨부 가능)
                 </span>
               </div>
               {DOC_DEFS.map(([slot, label, hint]) => {
-                const d = editor.docs[slot];
-                const hasImg = !!(d && d.url);
+                const arr = editor.docs[slot];
                 return (
                   <div
                     key={slot}
@@ -761,78 +776,29 @@ export default function Partners() {
                       borderRadius: 11,
                       padding: "12px 14px",
                       display: "flex",
-                      alignItems: "center",
-                      gap: 13,
+                      flexDirection: "column",
+                      gap: 10,
                     }}
                   >
-                    {hasImg ? (
-                      <img
-                        src={d!.url}
-                        alt={label}
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 8,
-                          objectFit: "cover",
-                          flexShrink: 0,
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 8,
-                          background: "#F4F7F5",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 18,
-                          flexShrink: 0,
-                        }}
-                      >
-                        📄
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</div>
-                      {d ? (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#3E8E68",
-                            fontWeight: 600,
-                            marginTop: 3,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          ✓ {d.name}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                          {label}
+                          {arr.length > 0 && (
+                            <span style={{ color: "#3E8E68", marginLeft: 6, fontSize: 12 }}>
+                              {arr.length}개
+                            </span>
+                          )}
                         </div>
-                      ) : (
                         <div style={{ fontSize: 12, color: "#9AA29C", marginTop: 3 }}>{hint}</div>
-                      )}
-                    </div>
-                    {d ? (
-                      <button
-                        onClick={() => removeDoc(slot)}
-                        className="gbtn"
-                        style={{
-                          padding: "7px 12px",
-                          border: "1px solid rgba(196,85,62,0.3)",
-                          borderRadius: 8,
-                          background: "#fff",
-                          color: "#C4553E",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          flexShrink: 0,
-                        }}
-                      >
-                        삭제
-                      </button>
-                    ) : (
+                      </div>
                       <label
                         className="gbtn"
                         style={{
@@ -848,15 +814,108 @@ export default function Partners() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        업로드
+                        + 업로드
                         <input
                           type="file"
-                          accept="image/*,.pdf"
+                          multiple
+                          accept="image/*,.pdf,.doc,.docx,.hwp,.hwpx"
                           onChange={onDoc(slot)}
                           style={{ display: "none" }}
                         />
                       </label>
-                    )}
+                    </div>
+                    {arr.map((d, idx) => {
+                      const hasImg = !!(d.url && /^data:image\//.test(d.url));
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 11,
+                            background: "#F7F9F7",
+                            borderRadius: 9,
+                            padding: "8px 10px",
+                          }}
+                        >
+                          {hasImg ? (
+                            <img
+                              src={d.url}
+                              alt={d.name}
+                              style={{ width: 36, height: 36, borderRadius: 7, objectFit: "cover", flexShrink: 0 }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 7,
+                                background: "#EAF0EC",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 16,
+                                flexShrink: 0,
+                              }}
+                            >
+                              📄
+                            </div>
+                          )}
+                          <span
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              color: "#3A3C45",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {d.name}
+                          </span>
+                          {d.url && (
+                            <button
+                              onClick={() => downloadFile(d)}
+                              className="gbtn"
+                              title="다운로드"
+                              style={{
+                                padding: "6px 10px",
+                                border: "1px solid rgba(14,123,78,0.35)",
+                                borderRadius: 7,
+                                background: "#fff",
+                                color: "#0E7B4E",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                flexShrink: 0,
+                              }}
+                            >
+                              ⬇
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeDoc(slot, idx)}
+                            className="gbtn"
+                            title="삭제"
+                            style={{
+                              padding: "6px 10px",
+                              border: "1px solid rgba(196,85,62,0.3)",
+                              borderRadius: 7,
+                              background: "#fff",
+                              color: "#C4553E",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}

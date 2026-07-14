@@ -30,13 +30,13 @@ export const demoMe = {
 };
 
 export const demoMembers = [
-  { name: "이일형", email: "ilhyung.lee@bio-lj.com", dept: "대표이사", role: "admin", init: "이", avatar_bg: "#0C0F0D" },
-  { name: "지경준", email: "kyungjun.ji@bio-lj.com", dept: "경영지원", role: "admin", init: "지", avatar_bg: "#0E7B4E" },
-  { name: "최민수", email: "minsu.choi@bio-lj.com", dept: "해외영업", role: "manager", init: "최", avatar_bg: "#7A4DD1" },
-  { name: "박지원", email: "jiwon.park@bio-lj.com", dept: "RA (인허가)", role: "manager", init: "박", avatar_bg: "#2A6FDB" },
-  { name: "김서연", email: "seoyeon.kim@bio-lj.com", dept: "해외영업", role: "staff", init: "김", avatar_bg: "#C6803A" },
-  { name: "정우성", email: "wooseong.jung@bio-lj.com", dept: "물류", role: "staff", init: "정", avatar_bg: "#D14D8B" },
-  { name: "한소희", email: "sohee.han@bio-lj.com", dept: "마케팅", role: "staff", init: "한", avatar_bg: "#1E9E5A" },
+  { name: "이일형", email: "ilhyung.lee@bio-lj.com", dept: "대표이사", role: "admin", init: "이", avatar_bg: "#0C0F0D", can_approve: true, is_ceo: true },
+  { name: "지경준", email: "kyungjun.ji@bio-lj.com", dept: "경영지원", role: "admin", init: "지", avatar_bg: "#0E7B4E", can_approve: true, is_ceo: false },
+  { name: "최민수", email: "minsu.choi@bio-lj.com", dept: "해외영업", role: "manager", init: "최", avatar_bg: "#7A4DD1", can_approve: true, is_ceo: false },
+  { name: "박지원", email: "jiwon.park@bio-lj.com", dept: "RA (인허가)", role: "manager", init: "박", avatar_bg: "#2A6FDB", can_approve: true, is_ceo: false },
+  { name: "김서연", email: "seoyeon.kim@bio-lj.com", dept: "해외영업", role: "staff", init: "김", avatar_bg: "#C6803A", can_approve: false, is_ceo: false },
+  { name: "정우성", email: "wooseong.jung@bio-lj.com", dept: "물류", role: "staff", init: "정", avatar_bg: "#D14D8B", can_approve: false, is_ceo: false },
+  { name: "한소희", email: "sohee.han@bio-lj.com", dept: "마케팅", role: "staff", init: "한", avatar_bg: "#1E9E5A", can_approve: false, is_ceo: false },
 ];
 
 export const demoPending: Partial<Profile>[] = [

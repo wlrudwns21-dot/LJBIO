@@ -14,6 +14,10 @@ export interface Profile {
   status: ApprovalStatus;
   init: string | null;
   avatar_bg: string;
+  /** 결제(전자결재) 승인 권한 — 마스터 계정이 계정관리에서 지정 */
+  can_approve?: boolean;
+  /** 대표자(최종 승인자) — 마스터 계정이 계정관리에서 1명 지정 */
+  is_ceo?: boolean;
   created_at: string;
 }
 
@@ -120,6 +124,18 @@ export interface Mail {
   sent_at: string;
 }
 
+/** 결재선의 한 단계(승인자). 마지막 단계는 항상 대표자입니다. */
+export interface ApprovalStep {
+  name: string;
+  email: string;
+  init: string | null;
+  avatar_bg: string;
+  role_label?: string;
+  is_ceo?: boolean;
+  status: ApprovalStatus; // pending | approved | rejected
+  acted_at?: string | null;
+}
+
 export interface Approval {
   id: string;
   seq: number;
@@ -136,6 +152,10 @@ export interface Approval {
   status: ApprovalStatus;
   approver: string | null;
   approved_at: string | null;
+  /** 첨부 문서 (파일명 + data URL) */
+  attachments?: Attachment[];
+  /** 결재선(순서대로 승인 단계). 마지막은 대표자. */
+  approval_line?: ApprovalStep[];
   created_at: string;
 }
 
@@ -148,10 +168,14 @@ export interface ContractType {
   template_name?: string | null;
 }
 
+/** 문서 슬롯 값: 없음 · 단일(과거) · 복수(현재) */
+export type DocSlotValue = Attachment | Attachment[] | null;
+
 export interface PartnerDocs {
-  bizReg: Attachment | null;
-  bankbook: Attachment | null;
-  contract: Attachment | null;
+  bizReg: DocSlotValue;
+  bankbook: DocSlotValue;
+  /** 계약서는 보안상 거래처에서 분리 — 문서관리에서 관리합니다. (과거 데이터 호환용) */
+  contract?: DocSlotValue;
 }
 
 export interface Partner {
@@ -181,7 +205,12 @@ export interface FileRow {
   seg_id: string | null;
   size: string;
   uploader: string;
+  /** data URL (다운로드용) 또는 스토리지 경로 */
   storage_path: string | null;
+  /** 거래계약 문서의 연결 거래처명 */
+  partner?: string;
+  /** 일반재무 등 자유 태그 */
+  tag?: string;
   created_at: string;
 }
 

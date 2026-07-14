@@ -1,9 +1,39 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { isMaster, DEFAULT_CEO, downloadFile } from "@/lib/access";
 import { useToast } from "../ui";
-import { demoApprovals, demoSegments, demoMe } from "../data/demo";
-import type { Approval, Segment } from "@/types/database";
+import { demoApprovals, demoSegments, demoMe, demoMembers } from "../data/demo";
+import type { Approval, Segment, ApprovalStep, Attachment } from "@/types/database";
+
+/** 결재선 후보/대표자로 쓰는 직원 최소 형태 */
+type Approver = {
+  name: string;
+  email: string;
+  init: string | null;
+  avatar_bg: string;
+  dept?: string;
+  role?: string;
+  can_approve?: boolean;
+  is_ceo?: boolean;
+};
+
+const TODAY_STR = "2026-07-11";
+const stepFrom = (m: Approver, isCeo = false): ApprovalStep => ({
+  name: m.name,
+  email: m.email,
+  init: m.init,
+  avatar_bg: m.avatar_bg,
+  role_label: m.dept || "",
+  is_ceo: isCeo,
+  status: "pending",
+  acted_at: null,
+});
+const sameUser = (s: { email?: string; name?: string }, me: { email?: string; name?: string }) =>
+  (!!s.email && !!me.email && s.email.toLowerCase() === me.email.toLowerCase()) ||
+  (!!s.name && s.name === me.name);
+const currentStepIdx = (a: Approval) =>
+  (a.approval_line || []).findIndex((s) => s.status === "pending");
 
 /* ------------------------------------------------------------------ meta */
 const apTypeMeta: Record<
@@ -58,16 +88,20 @@ type Editor = {
   amount: string;
   due: string;
   content: string;
+  line: string[]; // 결재선(선택한 승인자 이메일, 순서대로) — 대표자는 자동으로 맨 끝
+  attachments: Attachment[];
 };
 
 export default function Approvals() {
   const { profile } = useAuth();
-  const me = profile ?? demoMe;
+  const me = (profile ?? demoMe) as Approver & { role?: string };
   const meIsAdmin = me.role === "admin";
+  const meIsMaster = isMaster(me);
   const flash = useToast();
 
   const [approvals, setApprovals] = useState<Approval[]>(demoApprovals);
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
+  const [members, setMembers] = useState<Approver[]>(demoMembers as Approver[]);
   const [filter, setFilter] = useState<string>("전체");
   const [editor, setEditor] = useState<Editor | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
@@ -92,8 +126,18 @@ export default function Approvals() {
         .select("*")
         .order("sort", { ascending: true });
       if (sg) setSegments(sg as Segment[]);
+      const { data: mm } = await supabase
+        .from("profiles")
+        .select("name,email,init,avatar_bg,dept,role,can_approve,is_ceo")
+        .eq("status", "approved")
+        .order("created_at", { ascending: true });
+      if (mm) setMembers(mm as Approver[]);
     })().catch(() => {});
   }, []);
+
+  const ceo: Approver = members.find((m) => m.is_ceo) || (DEFAULT_CEO as Approver);
+  // 결재선 후보: 결제 권한이 있는 직원 (대표자는 자동으로 맨 끝에 붙으므로 제외)
+  const approvers = members.filter((m) => m.can_approve && !m.is_ceo);
 
   async function persist(fn: () => PromiseLike<unknown>) {
     if (isSupabaseConfigured) { try { await fn(); } catch { /* ignore */ } }
@@ -104,11 +148,16 @@ export default function Approvals() {
   const segColor = (id: string | null) =>
     segments.find((s) => s.id === id)?.color || "#84908A";
 
-  const canSee = (a: Approval) => meIsAdmin || a.drafter === me.name;
+  // 열람: 마스터(지경준)는 전체 · 그 외에는 상신자 본인 또는 결재선에 포함된 승인자만
+  const canSee = (a: Approval) =>
+    meIsMaster ||
+    a.drafter === me.name ||
+    (a.approval_line || []).some((s) => sameUser(s, me));
 
   const visible = useMemo(
     () => approvals.filter(canSee),
-    [approvals, meIsAdmin, me.name],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [approvals, meIsMaster, me.name, me.email],
   );
   const filtered = visible.filter(
     (a) => filter === "전체" || a.status === filter,
@@ -131,7 +180,44 @@ export default function Approvals() {
       amount: "",
       due: "2026-07-20",
       content: "",
+      line: [],
+      attachments: [],
     });
+  }
+
+  function toggleLine(email: string) {
+    setEditor((ed) => {
+      if (!ed) return ed;
+      const has = ed.line.includes(email);
+      return { ...ed, line: has ? ed.line.filter((e) => e !== email) : [...ed.line, email] };
+    });
+  }
+
+  async function onEditorFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!picked.length) return;
+    const added = await Promise.all(
+      picked.map(
+        (f) =>
+          new Promise<Attachment>((res) => {
+            const r = new FileReader();
+            r.onload = () => res({ name: f.name, url: String(r.result || "") });
+            r.onerror = () => res({ name: f.name });
+            r.readAsDataURL(f);
+          }),
+      ),
+    );
+    setEditor((ed) => (ed ? { ...ed, attachments: [...ed.attachments, ...added] } : ed));
+  }
+
+  /** 결재선 구성: 선택한 승인자(순서대로) + 대표자(항상 맨 끝 최종 승인) */
+  function buildLine(emails: string[]): ApprovalStep[] {
+    const picked = emails
+      .map((em) => approvers.find((m) => m.email === em))
+      .filter(Boolean)
+      .map((m) => stepFrom(m as Approver));
+    return [...picked, stepFrom(ceo, true)];
   }
 
   function saveApproval() {
@@ -142,34 +228,18 @@ export default function Approvals() {
     }
     if (editor.id != null) {
       const id = editor.id;
-      setApprovals((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                type: editor.type,
-                title: editor.title,
-                seg_id: editor.segId,
-                amount: editor.amount,
-                due: editor.due,
-                content: editor.content,
-              }
-            : a,
-        ),
-      );
-      persist(() =>
-        supabase
-          .from("approvals")
-          .update({
-            type: editor.type,
-            title: editor.title,
-            seg_id: editor.segId,
-            amount: editor.amount,
-            due: editor.due,
-            content: editor.content,
-          })
-          .eq("id", id),
-      );
+      const patch = {
+        type: editor.type,
+        title: editor.title,
+        seg_id: editor.segId,
+        amount: editor.amount,
+        due: editor.due,
+        content: editor.content,
+        attachments: editor.attachments,
+        approval_line: buildLine(editor.line),
+      };
+      setApprovals((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+      persist(() => supabase.from("approvals").update(patch).eq("id", id));
       setEditor(null);
       flash("결재 문서를 수정했습니다");
     } else {
@@ -190,14 +260,16 @@ export default function Approvals() {
         status: "pending",
         approver: null,
         approved_at: null,
-        created_at: "2026-07-11",
+        attachments: editor.attachments,
+        approval_line: buildLine(editor.line),
+        created_at: TODAY_STR,
       };
       setApprovals((prev) => [na, ...prev]);
       persist(async () => {
-        const { seq, type, title, seg_id, drafter, d_init, d_bg, amount, due, content, status } = na;
+        const { seq, type, title, seg_id, drafter, d_init, d_bg, amount, due, content, status, attachments, approval_line } = na;
         const { data } = await supabase
           .from("approvals")
-          .insert({ seq, type, title, seg_id, drafter, d_init, d_bg, amount, due, content, status })
+          .insert({ seq, type, title, seg_id, drafter, d_init, d_bg, amount, due, content, status, attachments, approval_line })
           .select()
           .single();
         if (data)
@@ -210,24 +282,34 @@ export default function Approvals() {
     }
   }
 
-  function decide(id: string, status: "approved" | "rejected") {
-    setApprovals((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, status, approver: "이일형", approved_at: "2026-07-11" }
-          : a,
-      ),
-    );
-    persist(() =>
-      supabase
-        .from("approvals")
-        .update({ status, approver: "이일형", approved_at: "2026-07-11" })
-        .eq("id", id),
-    );
+  /** 현재 단계 승인/반려 — 마지막(대표자) 승인 시 문서가 최종 승인 처리됩니다. */
+  function decide(a: Approval, action: "approved" | "rejected") {
+    const line = [...(a.approval_line || [])];
+    const idx = currentStepIdx(a);
+    if (idx < 0) return;
+    line[idx] = { ...line[idx], status: action, acted_at: TODAY_STR };
+    const isLast = idx === line.length - 1;
+    let status: Approval["status"] = a.status;
+    let approver = a.approver;
+    let approved_at = a.approved_at;
+    if (action === "rejected") {
+      status = "rejected";
+      approver = me.name;
+      approved_at = TODAY_STR;
+    } else if (isLast) {
+      status = "approved";
+      approver = ceo.name;
+      approved_at = TODAY_STR;
+    }
+    const patch = { approval_line: line, status, approver, approved_at };
+    setApprovals((prev) => prev.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
+    persist(() => supabase.from("approvals").update(patch).eq("id", a.id));
     flash(
-      status === "approved"
-        ? "결재 승인 및 날인이 완료되었습니다"
-        : "결재를 반려했습니다",
+      action === "rejected"
+        ? "결재를 반려했습니다"
+        : isLast
+          ? "최종 승인 및 날인이 완료되었습니다"
+          : line[idx].name + " 단계 승인 완료 — 다음 결재자에게 넘어갑니다",
     );
   }
 
@@ -257,8 +339,9 @@ export default function Approvals() {
             lineHeight: 1.5,
           }}
         >
-          결재 문서는 <b>상신자 본인</b>과 <b>관리자(대표·경영지원)</b>만 열람할
-          수 있습니다. 관리자 승인 시 회사 직인이 자동 날인됩니다.
+          결재 문서는 <b>상신자 본인</b>, <b>결재선 승인자</b>, <b>총괄 관리자</b>만
+          열람할 수 있습니다. 결재선 순서대로 승인되며, <b>대표자 최종 승인</b> 시
+          회사 직인이 자동 날인됩니다.
         </span>
       </div>
 
@@ -682,6 +765,172 @@ export default function Approvals() {
                   }}
                 />
               </div>
+
+              {/* 결재선 — 결제 권한 직원 중 순서대로 선택 (대표자는 자동으로 맨 끝) */}
+              <div>
+                <label style={lblStyle}>
+                  결재선{" "}
+                  <span style={{ color: "#84908A", fontWeight: 500 }}>
+                    (결제 권한 직원 중 선택 · 대표자 최종 승인 자동 추가)
+                  </span>
+                </label>
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  {approvers.length === 0 && (
+                    <span style={{ fontSize: 12.5, color: "#9AA29C" }}>
+                      결제 권한이 지정된 직원이 없습니다. (관리자 → 계정관리에서 지정)
+                    </span>
+                  )}
+                  {approvers.map((m) => {
+                    const on = editor.line.includes(m.email);
+                    const order = editor.line.indexOf(m.email) + 1;
+                    return (
+                      <button
+                        key={m.email}
+                        type="button"
+                        onClick={() => toggleLine(m.email)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "7px 13px",
+                          borderRadius: 20,
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          border: `1.5px solid ${on ? "#0E7B4E" : "rgba(12,15,13,0.14)"}`,
+                          background: on ? "#0E7B4E" : "#fff",
+                          color: on ? "#fff" : "#4A4C55",
+                        }}
+                      >
+                        {on && (
+                          <span
+                            style={{
+                              width: 16,
+                              height: 16,
+                              borderRadius: "50%",
+                              background: "rgba(255,255,255,0.25)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 10,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {order}
+                          </span>
+                        )}
+                        {m.name}
+                        <span style={{ opacity: 0.7, fontWeight: 500 }}>· {m.dept}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: 12,
+                    color: "#3E8E68",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <b>결재 순서:</b> 상신({me.name})
+                  {editor.line.map((em) => {
+                    const m = approvers.find((x) => x.email === em);
+                    return <span key={em}>→ {m?.name || em}</span>;
+                  })}
+                  <span>→ 대표자({ceo.name}) 최종</span>
+                </div>
+              </div>
+
+              {/* 첨부 문서 */}
+              <div>
+                <label
+                  style={{
+                    ...lblStyle,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  첨부 문서
+                  <label
+                    className="gbtn"
+                    style={{
+                      fontSize: 12,
+                      color: "#0E7B4E",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "1px solid rgba(14,123,78,0.4)",
+                      borderRadius: 8,
+                      padding: "5px 11px",
+                    }}
+                  >
+                    + 파일 추가
+                    <input
+                      type="file"
+                      multiple
+                      onChange={onEditorFiles}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </label>
+                {editor.attachments.length > 0 && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 7 }}>
+                    {editor.attachments.map((att, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 9,
+                          background: "#F7F9F7",
+                          borderRadius: 8,
+                          padding: "7px 11px",
+                          fontSize: 12.5,
+                        }}
+                      >
+                        <span style={{ flexShrink: 0 }}>📎</span>
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontWeight: 600,
+                            color: "#3A3C45",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {att.name}
+                        </span>
+                        <span
+                          onClick={() =>
+                            setEditor((ed) =>
+                              ed
+                                ? { ...ed, attachments: ed.attachments.filter((_, j) => j !== i) }
+                                : ed,
+                            )
+                          }
+                          style={{ cursor: "pointer", color: "#C4553E", fontWeight: 700 }}
+                        >
+                          ×
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div
                 style={{
                   fontSize: 12,
@@ -692,9 +941,9 @@ export default function Approvals() {
                   lineHeight: 1.6,
                 }}
               >
-                상신자 <b style={{ color: "#0C0F0D" }}>지경준</b> · 최종 승인{" "}
-                <b style={{ color: "#0C0F0D" }}>대표이사 이일형</b> · 상신자
-                본인과 관리자만 열람할 수 있습니다.
+                상신자 <b style={{ color: "#0C0F0D" }}>{me.name}</b> · 최종 승인{" "}
+                <b style={{ color: "#0C0F0D" }}>대표자 {ceo.name}</b> · 상신자
+                본인과 결재선에 포함된 승인자만 열람할 수 있습니다.
               </div>
             </div>
             <div
@@ -746,7 +995,9 @@ export default function Approvals() {
       {sel && (
         <ApprovalDetail
           a={sel}
-          meIsAdmin={meIsAdmin}
+          me={me}
+          meIsMaster={meIsMaster}
+          ceoName={ceo.name}
           sealImg={sealImg}
           segName={segName}
           segColor={segColor}
@@ -760,11 +1011,15 @@ export default function Approvals() {
               amount: sel.amount,
               due: sel.due || "",
               content: sel.content,
+              line: (sel.approval_line || [])
+                .filter((s) => !s.is_ceo)
+                .map((s) => s.email),
+              attachments: sel.attachments || [],
             });
             setSelId(null);
           }}
-          onApprove={() => decide(sel.id, "approved")}
-          onReject={() => decide(sel.id, "rejected")}
+          onApprove={() => decide(sel, "approved")}
+          onReject={() => decide(sel, "rejected")}
         />
       )}
     </div>
@@ -774,7 +1029,9 @@ export default function Approvals() {
 /* ------------------------------------------------------------- detail modal */
 function ApprovalDetail({
   a,
-  meIsAdmin,
+  me,
+  meIsMaster,
+  ceoName,
   sealImg,
   segName,
   segColor,
@@ -784,7 +1041,9 @@ function ApprovalDetail({
   onReject,
 }: {
   a: Approval;
-  meIsAdmin: boolean;
+  me: { name?: string; email?: string };
+  meIsMaster: boolean;
+  ceoName: string;
   sealImg: string | null;
   segName: (id: string | null) => string;
   segColor: (id: string | null) => string;
@@ -805,9 +1064,18 @@ function ApprovalDetail({
   const statusColor = isApproved ? "#3E8E68" : isRejected ? "#D14343" : "#C6803A";
   const statusBg = isApproved ? "#E9F2EC" : isRejected ? "#FDE8E8" : "#FFF4E0";
   const sc = segColor(a.seg_id);
-  const canAct = isPending && meIsAdmin;
-  const showSealImg = isApproved && !!sealImg;
-  const showSealFallback = isApproved && !sealImg;
+  const line = a.approval_line || [];
+  const curIdx = line.findIndex((s) => s.status === "pending");
+  const curStep = curIdx >= 0 ? line[curIdx] : null;
+  // 현재 결재 단계의 승인자 본인(또는 마스터)만 결재할 수 있습니다.
+  const canAct =
+    isPending &&
+    !!curStep &&
+    (meIsMaster ||
+      (!!curStep.email && !!me.email && curStep.email.toLowerCase() === me.email.toLowerCase()) ||
+      curStep.name === me.name);
+  const curIsCeo = !!curStep?.is_ceo;
+  const attachments = a.attachments || [];
 
   return (
     <div
@@ -943,11 +1211,14 @@ function ApprovalDetail({
                 display: "flex",
                 border: "1px solid #0C0F0D",
                 flexShrink: 0,
+                maxWidth: "100%",
+                overflowX: "auto",
               }}
             >
               <div
                 style={{
                   width: 34,
+                  flexShrink: 0,
                   background: "#F4F7F5",
                   borderRight: "1px solid rgba(12,15,13,0.35)",
                   display: "flex",
@@ -969,7 +1240,8 @@ function ApprovalDetail({
               </div>
               <div
                 style={{
-                  width: 98,
+                  width: 92,
+                  flexShrink: 0,
                   borderRight: "1px solid rgba(12,15,13,0.35)",
                 }}
               >
@@ -998,109 +1270,140 @@ function ApprovalDetail({
                   </span>
                 </div>
               </div>
-              <div style={{ width: 98 }}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: 5,
-                    borderBottom: "1px solid rgba(12,15,13,0.35)",
-                    background: "#F4F7F5",
-                  }}
-                >
-                  대표이사
-                </div>
-                <div
-                  style={{
-                    height: 92,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    position: "relative",
-                  }}
-                >
-                  <span
-                    style={{ fontSize: 15, fontWeight: 600, color: "#4A4C55" }}
+              {line.map((s, i) => {
+                const last = i === line.length - 1;
+                const appr = s.status === "approved";
+                const rej = s.status === "rejected";
+                const isCur = i === curIdx;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      width: 92,
+                      flexShrink: 0,
+                      borderRight: last ? "none" : "1px solid rgba(12,15,13,0.35)",
+                    }}
                   >
-                    이일형
-                  </span>
-                  {showSealImg && (
-                    <img
-                      src={sealImg as string}
-                      alt="직인"
-                      style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%,-50%)",
-                        width: 74,
-                        height: 74,
-                        objectFit: "contain",
-                        opacity: 0.9,
-                        pointerEvents: "none",
-                      }}
-                    />
-                  )}
-                  {showSealFallback && (
                     <div
                       style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%,-50%) rotate(-9deg)",
-                        width: 74,
-                        height: 74,
-                        borderRadius: "50%",
-                        border: "2.5px double #C0392B",
+                        textAlign: "center",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: 5,
+                        borderBottom: "1px solid rgba(12,15,13,0.35)",
+                        background: s.is_ceo ? "#EFF6F1" : "#F4F7F5",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {s.is_ceo ? "대표자" : s.role_label || "결재"}
+                    </div>
+                    <div
+                      style={{
+                        height: 92,
                         display: "flex",
-                        flexDirection: "column",
                         alignItems: "center",
                         justifyContent: "center",
-                        color: "#C0392B",
-                        background: "rgba(255,255,255,0.35)",
-                        pointerEvents: "none",
+                        position: "relative",
+                        background: isCur && isPending ? "#FFFBF2" : undefined,
                       }}
                     >
-                      <div style={{ fontSize: 7.5, fontWeight: 700 }}>
-                        엘제이바이오
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 800,
-                          margin: "1px 0",
-                        }}
-                      >
-                        이일형
-                      </div>
-                      <div style={{ fontSize: 6.5, fontWeight: 700 }}>
-                        代表理事印
-                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "#4A4C55" }}>
+                        {s.name}
+                      </span>
+                      {appr && s.is_ceo && sealImg && (
+                        <img
+                          src={sealImg}
+                          alt="직인"
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%,-50%)",
+                            width: 70,
+                            height: 70,
+                            objectFit: "contain",
+                            opacity: 0.9,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
+                      {appr && s.is_ceo && !sealImg && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%,-50%) rotate(-9deg)",
+                            width: 66,
+                            height: 66,
+                            borderRadius: "50%",
+                            border: "2.5px double #C0392B",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#C0392B",
+                            background: "rgba(255,255,255,0.35)",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          <div style={{ fontSize: 7, fontWeight: 700 }}>엘제이바이오</div>
+                          <div style={{ fontSize: 11, fontWeight: 800, margin: "1px 0" }}>
+                            {s.name}
+                          </div>
+                          <div style={{ fontSize: 6, fontWeight: 700 }}>代表理事印</div>
+                        </div>
+                      )}
+                      {appr && !s.is_ceo && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%,-50%) rotate(-8deg)",
+                            width: 56,
+                            height: 56,
+                            borderRadius: "50%",
+                            border: "2px solid #0E7B4E",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#0E7B4E",
+                            fontSize: 12,
+                            fontWeight: 800,
+                            background: "rgba(255,255,255,0.3)",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          승인
+                        </div>
+                      )}
+                      {rej && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%,-50%) rotate(-10deg)",
+                            padding: "3px 8px",
+                            border: "2px solid #C0392B",
+                            borderRadius: 6,
+                            color: "#C0392B",
+                            fontSize: 13,
+                            fontWeight: 800,
+                            letterSpacing: "0.1em",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          반려
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {isRejected && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%,-50%) rotate(-10deg)",
-                        padding: "3px 8px",
-                        border: "2px solid #C0392B",
-                        borderRadius: 6,
-                        color: "#C0392B",
-                        fontSize: 13,
-                        fontWeight: 800,
-                        letterSpacing: "0.1em",
-                        pointerEvents: "none",
-                      }}
-                    >
-                      반려
-                    </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -1207,9 +1510,96 @@ function ApprovalDetail({
               {a.content}
             </div>
           </div>
+          {attachments.length > 0 && (
+            <div style={{ marginTop: 22 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#84908A",
+                  letterSpacing: "0.02em",
+                  marginBottom: 9,
+                }}
+              >
+                첨부 문서 ({attachments.length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {attachments.map((att, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      border: "1px solid rgba(12,15,13,0.1)",
+                      borderRadius: 9,
+                      padding: "9px 12px",
+                    }}
+                  >
+                    <span style={{ flexShrink: 0 }}>📎</span>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#3A3C45",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {att.name}
+                    </span>
+                    {att.url && (
+                      <button
+                        onClick={() => downloadFile(att)}
+                        className="gbtn"
+                        style={{
+                          padding: "6px 12px",
+                          border: "1px solid rgba(14,123,78,0.35)",
+                          borderRadius: 8,
+                          background: "#fff",
+                          color: "#0E7B4E",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        ⬇ 다운로드
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isPending && curStep && (
+            <div
+              style={{
+                marginTop: 20,
+                fontSize: 12.5,
+                color: "#8A5A16",
+                background: "#FFF7E8",
+                border: "1px solid rgba(198,128,58,0.28)",
+                borderRadius: 10,
+                padding: "11px 15px",
+                lineHeight: 1.5,
+              }}
+            >
+              ⏳ 현재 결재 차례:{" "}
+              <b style={{ color: "#0C0F0D" }}>
+                {curStep.name}
+                {curStep.is_ceo ? " (대표자 최종)" : ""}
+              </b>
+            </div>
+          )}
+
           <div
             style={{
-              marginTop: 24,
+              marginTop: 16,
               fontSize: 12,
               color: "#84908A",
               display: "flex",
@@ -1222,8 +1612,8 @@ function ApprovalDetail({
             }}
           >
             🔒 이 문서는 상신자{" "}
-            <b style={{ color: "#0C0F0D" }}>{a.drafter}</b> 와
-            관리자(대표·경영지원)만 열람할 수 있습니다.
+            <b style={{ color: "#0C0F0D" }}>{a.drafter}</b>, 결재선 승인자, 그리고
+            총괄 관리자만 열람할 수 있습니다.
           </div>
         </div>
 
@@ -1269,7 +1659,7 @@ function ApprovalDetail({
                 cursor: "pointer",
               }}
             >
-              ✓ 승인 및 날인
+              {curIsCeo ? "✓ 최종 승인 및 날인" : "✓ 이 단계 승인"}
             </button>
           </div>
         )}
@@ -1284,7 +1674,11 @@ function ApprovalDetail({
               color: "#84908A",
             }}
           >
-            {(a.approved_at || "") + " · 대표이사 이일형 · " + statusLabel}
+            {(a.approved_at || "") +
+              " · " +
+              (a.approver || ceoName) +
+              " · " +
+              statusLabel}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { theme, roleLabel, roleStyle, fmtKRW } from "@/lib/theme";
 import { useAuth } from "@/context/AuthContext";
+import { isMaster } from "@/lib/access";
 import { useToast } from "../ui";
 
 function NoAccess({ label }: { label: string }) {
@@ -33,6 +34,7 @@ import {
   demoMembers,
   demoSegments,
   demoContractTypes,
+  demoMe,
 } from "../data/demo";
 import type { Segment, Profile } from "@/types/database";
 
@@ -45,6 +47,8 @@ type MemberRow = {
   role: string;
   init: string | null;
   avatar_bg: string;
+  can_approve?: boolean;
+  is_ceo?: boolean;
 };
 type CtRow = {
   id: string;
@@ -63,6 +67,7 @@ export default function Admin() {
   const flash = useToast();
   const { profile } = useAuth();
   const canAccess = (profile?.role ?? "admin") === "admin";
+  const meMaster = isMaster(profile ?? { email: demoMe.email }); // 결제권한·대표자 지정은 마스터만
 
   const [pending, setPending] = useState<PendingRow[]>(
     demoPending as PendingRow[],
@@ -148,6 +153,34 @@ export default function Admin() {
     setMembers((list) => list.filter((x) => (x.id || x.email) !== (m.id || m.email)));
     if (m.id) void persist(() => supabase.from("profiles").delete().eq("id", m.id!));
     flash(m.name + " 계정을 삭제했습니다");
+  }
+
+  const memberKey = (m: MemberRow) => m.id || m.email;
+
+  function toggleApprove(m: MemberRow) {
+    const next = !m.can_approve;
+    setMembers((list) =>
+      list.map((x) => (memberKey(x) === memberKey(m) ? { ...x, can_approve: next } : x)),
+    );
+    if (m.id)
+      void persist(() =>
+        supabase.from("profiles").update({ can_approve: next }).eq("id", m.id!),
+      );
+    flash(m.name + (next ? " 결제 승인 권한을 부여했습니다" : " 결제 권한을 해제했습니다"));
+  }
+
+  function setCeo(m: MemberRow) {
+    const makeCeo = !m.is_ceo;
+    // 대표자는 1명만 — 나머지는 모두 해제
+    setMembers((list) =>
+      list.map((x) => ({ ...x, is_ceo: memberKey(x) === memberKey(m) ? makeCeo : false })),
+    );
+    void persist(async () => {
+      await supabase.from("profiles").update({ is_ceo: false }).not("id", "is", null);
+      if (makeCeo && m.id)
+        await supabase.from("profiles").update({ is_ceo: true }).eq("id", m.id);
+    });
+    flash(makeCeo ? m.name + " 님을 대표자(최종 승인)로 지정했습니다" : "대표자 지정을 해제했습니다");
   }
 
   /* --------------------------------------------------------- segments */
@@ -449,6 +482,11 @@ export default function Admin() {
           }}
         >
           <h3 style={{ fontSize: 16, fontWeight: 700 }}>직원 계정 · 권한 관리</h3>
+          <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 2 }}>
+            {meMaster
+              ? "결제권한(전자결재 승인)·대표자(최종 승인자, 1명)는 마스터 계정만 지정할 수 있습니다."
+              : "결제권한·대표자 지정은 총괄 관리자(마스터) 계정에서만 가능합니다."}
+          </div>
         </div>
         <div
           className="g-members"
@@ -518,7 +556,9 @@ export default function Admin() {
                 </span>
               </span>
               <span style={{ fontSize: 13, color: "#5A5C65" }}>{m.dept}</span>
-              <span>
+              <span
+                style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}
+              >
                 <span
                   style={{
                     fontSize: 11.5,
@@ -531,6 +571,73 @@ export default function Admin() {
                 >
                   {roleLabel(m.role)}
                 </span>
+                {meMaster ? (
+                  <>
+                    <button
+                      onClick={() => toggleApprove(m)}
+                      title="결제(전자결재) 승인 권한"
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: "3px 9px",
+                        borderRadius: 20,
+                        cursor: "pointer",
+                        border: `1px solid ${m.can_approve ? "#0E7B4E" : "rgba(12,15,13,0.16)"}`,
+                        background: m.can_approve ? "#0E7B4E" : "#fff",
+                        color: m.can_approve ? "#fff" : "#84908A",
+                      }}
+                    >
+                      {m.can_approve ? "✓ 결제권한" : "결제권한"}
+                    </button>
+                    <button
+                      onClick={() => setCeo(m)}
+                      title="대표자(최종 승인자) 지정 — 1명"
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: "3px 9px",
+                        borderRadius: 20,
+                        cursor: "pointer",
+                        border: `1px solid ${m.is_ceo ? "#C0392B" : "rgba(12,15,13,0.16)"}`,
+                        background: m.is_ceo ? "#C0392B" : "#fff",
+                        color: m.is_ceo ? "#fff" : "#84908A",
+                      }}
+                    >
+                      {m.is_ceo ? "★ 대표자" : "대표자"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {m.can_approve && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "3px 9px",
+                          borderRadius: 20,
+                          background: "#E9F2EC",
+                          color: "#3E8E68",
+                        }}
+                      >
+                        결제권한
+                      </span>
+                    )}
+                    {m.is_ceo && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "3px 9px",
+                          borderRadius: 20,
+                          background: "#FDE8E8",
+                          color: "#C0392B",
+                        }}
+                      >
+                        ★ 대표자
+                      </span>
+                    )}
+                  </>
+                )}
               </span>
               <span
                 style={{
