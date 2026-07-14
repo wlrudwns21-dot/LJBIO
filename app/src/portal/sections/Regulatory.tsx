@@ -299,7 +299,27 @@ async function querySource(
       const { data, error: fnErr } = await supabase.functions.invoke("mfds", {
         body: { path, params },
       });
-      if (fnErr) throw new Error(fnErr.message || "조회 서버 호출 실패");
+      if (fnErr) {
+        // FunctionsHttpError의 응답 본문에서 실제 원인 추출
+        let msg = fnErr.message || "조회 서버 호출 실패";
+        const ctx = (fnErr as { context?: Response }).context;
+        if (ctx && typeof ctx.clone === "function") {
+          try {
+            const t = await ctx.clone().text();
+            try {
+              const j = JSON.parse(t) as { error?: string; message?: string; msg?: string };
+              msg = j.error || j.message || j.msg || msg;
+            } catch {
+              if (t) msg = t.slice(0, 200);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        if (/not\s*found|404/i.test(msg))
+          msg = "Supabase에 'mfds' Edge Function이 없습니다. 함수 이름이 mfds인지 확인하세요.";
+        throw new Error(msg);
+      }
       const res = data as { ok?: boolean; data?: unknown; error?: string };
       if (!res?.ok) throw new Error(res?.error || "API 오류");
       const r = extract(res.data);
