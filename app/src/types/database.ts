@@ -192,7 +192,7 @@ export interface Partner {
   phone: string;
   contact_name: string;
   contact_email: string;
-  deal_type: "매출" | "매입";
+  deal_type: "매출" | "매입" | "매입·매출";
   seg_id: string | null;
   contract_type: string;
   memo: string;

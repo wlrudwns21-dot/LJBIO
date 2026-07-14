@@ -189,7 +189,7 @@ export default function Partners() {
     flash("계약서 유형을 추가했습니다");
   };
 
-  const savePartner = () => {
+  const savePartner = async () => {
     if (!editor) return;
     if (!(editor.name || "").trim()) {
       flash("상호(거래처명)를 입력하세요");
@@ -212,24 +212,37 @@ export default function Partners() {
       docs: editor.docs,
     };
     if (editor.id != null) {
-      setPartners((ps) =>
-        ps.map((p) => (p.id === editor.id ? { ...p, ...payload } : p)),
-      );
-      persist(() => supabase.from("partners").update(payload).eq("id", editor.id!)).catch(() => {});
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("partners").update(payload).eq("id", editor.id);
+        if (error) {
+          flash("저장 실패: " + error.message);
+          return; // 모달 유지 — 입력 내용 보존
+        }
+      }
+      setPartners((ps) => ps.map((p) => (p.id === editor.id ? { ...p, ...payload } : p)));
       setEditor(null);
       flash("거래처 정보를 수정했습니다");
     } else {
-      const nid = String(
-        partners.reduce((a, p) => Math.max(a, Number(p.id) || 0), 0) + 1,
-      );
-      setPartners((ps) => [
-        { ...payload, id: nid, created_at: "2026-07-11" } as Partner,
-        ...ps,
-      ]);
-      persist(async () => {
-        const { data } = await supabase.from("partners").insert(payload).select().single();
-        if (data) setPartners((ps) => ps.map((p) => (p.id === nid ? (data as Partner) : p)));
-      }).catch(() => {});
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("partners")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) {
+          flash("등록 실패: " + error.message);
+          return; // 모달 유지 — 입력 내용 보존
+        }
+        if (data) setPartners((ps) => [data as Partner, ...ps]);
+      } else {
+        const nid = String(
+          partners.reduce((a, p) => Math.max(a, Number(p.id) || 0), 0) + 1,
+        );
+        setPartners((ps) => [
+          { ...payload, id: nid, created_at: "2026-07-11" } as Partner,
+          ...ps,
+        ]);
+      }
       setEditor(null);
       flash("거래처를 등록했습니다");
     }

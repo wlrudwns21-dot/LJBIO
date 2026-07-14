@@ -92,7 +92,10 @@ export default function Admin() {
       const res = await migrateAllToStorage((m) => setMigrateMsg(m));
       setMigrateMsg(
         `완료 · ${res.moved}개 파일을 Storage로 이전했습니다` +
-          (res.failed ? ` (실패 ${res.failed}개)` : ""),
+          (res.failed ? ` (실패 ${res.failed}개)` : "") +
+          (res.errors && res.errors.length
+            ? ` — 실패 원인: ${res.errors.join(" / ")}`
+            : ""),
       );
       flash("파일 Storage 이전 완료");
     } catch {

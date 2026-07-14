@@ -38,26 +38,26 @@ function safeName(name: string): string {
   return (name || "file").replace(/[^\w.\-가-힣]+/g, "_").slice(-120);
 }
 
-/** Storage에 업로드하고 저장 경로를 반환 (실패 시 null) */
+/** Storage에 업로드. { path, error } 반환 (실패 시 path=null, error=사유) */
 export async function uploadToStorage(
   blob: Blob,
   folder: string,
   name: string,
-): Promise<string | null> {
-  if (!isSupabaseConfigured) return null;
+): Promise<{ path: string | null; error: string | null }> {
+  if (!isSupabaseConfigured) return { path: null, error: "no-storage" };
   const path = `${folder}/${Date.now()}-${rnd()}-${safeName(name)}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
     upsert: false,
     contentType: blob.type || undefined,
   });
-  if (error) return null;
-  return path;
+  if (error) return { path: null, error: error.message || String(error) };
+  return { path, error: null };
 }
 
 /** 업로드용: 라이브면 Storage 경로를, 데모/실패면 data URL을 담은 첨부를 반환 */
 export async function storeUpload(file: File, folder: string): Promise<Attachment> {
   if (isSupabaseConfigured) {
-    const path = await uploadToStorage(file, folder, file.name);
+    const { path } = await uploadToStorage(file, folder, file.name);
     if (path) return { name: file.name, path };
   }
   return { name: file.name, url: await fileToDataUrl(file) };
@@ -114,19 +114,24 @@ export async function previewUrl(att?: Attachment | null): Promise<string | null
 /** 기존 DB(base64) 파일들을 Storage로 이전. 이미 이전된 항목은 건너뜁니다. */
 export async function migrateAllToStorage(
   log: (msg: string) => void,
-): Promise<{ moved: number; failed: number }> {
-  if (!isSupabaseConfigured) return { moved: 0, failed: 0 };
+): Promise<{ moved: number; failed: number; errors: string[] }> {
+  if (!isSupabaseConfigured) return { moved: 0, failed: 0, errors: [] };
   let moved = 0;
   let failed = 0;
+  const errors: string[] = [];
+  const noteErr = (msg: string) => {
+    if (msg && errors.length < 5 && !errors.includes(msg)) errors.push(msg);
+  };
   const move = async (dataUrl: string, folder: string, name: string) => {
     try {
-      const path = await uploadToStorage(dataUrlToBlob(dataUrl), folder, name);
+      const { path, error } = await uploadToStorage(dataUrlToBlob(dataUrl), folder, name);
       if (path) {
         moved++;
         return path;
       }
-    } catch {
-      /* ignore */
+      if (error) noteErr(error);
+    } catch (e) {
+      noteErr((e as { message?: string })?.message || String(e));
     }
     failed++;
     return null;
@@ -192,5 +197,5 @@ export async function migrateAllToStorage(
   }
   log("계약서 양식 이전 완료");
 
-  return { moved, failed };
+  return { moved, failed, errors };
 }

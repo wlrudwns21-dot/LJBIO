@@ -7,9 +7,12 @@
 -- 실행: Supabase → SQL Editor → 붙여넣기 → Run.
 -- ============================================================================
 
-insert into storage.buckets (id, name, public)
-values ('documents', 'documents', false)
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('documents', 'documents', false, 104857600)  -- 100MB/파일
 on conflict (id) do nothing;
+
+-- 이미 버킷이 있으면 파일 용량 제한을 100MB로 올림(재실행 안전)
+update storage.buckets set file_size_limit = 104857600 where id = 'documents';
 
 drop policy if exists "documents_read"   on storage.objects;
 drop policy if exists "documents_insert" on storage.objects;

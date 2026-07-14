@@ -173,7 +173,7 @@ create table if not exists public.partners (
   phone         text default '',
   contact_name  text default '',
   contact_email text default '',
-  deal_type     text default '매출' check (deal_type in ('매출', '매입')),
+  deal_type     text default '매출' check (deal_type in ('매출', '매입', '매입·매출')),
   seg_id        text references public.segments (id) on delete set null,
   contract_type text default '',
   memo          text default '',
