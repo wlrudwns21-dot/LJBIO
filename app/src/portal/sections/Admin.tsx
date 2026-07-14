@@ -66,8 +66,8 @@ async function persist(fn: () => PromiseLike<unknown>) {
 export default function Admin() {
   const flash = useToast();
   const { profile } = useAuth();
-  const canAccess = (profile?.role ?? "admin") === "admin";
   const meMaster = isMaster(profile ?? { email: demoMe.email }); // 결제권한·대표자 지정은 마스터만
+  const canAccess = meMaster; // 관리자 탭은 마스터(지경준)만 접근
 
   const [pending, setPending] = useState<PendingRow[]>(
     demoPending as PendingRow[],
@@ -322,7 +322,7 @@ export default function Admin() {
 
   /* =============================================================== view */
   if (!canAccess)
-    return <NoAccess label="관리자 메뉴는 관리자만 이용할 수 있습니다." />;
+    return <NoAccess label="관리자 메뉴는 총괄 관리자(마스터) 계정만 이용할 수 있습니다." />;
 
   return (
     <div className="fade" style={{ maxWidth: 1160, margin: "0 auto" }}>

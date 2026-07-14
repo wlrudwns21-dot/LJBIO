@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { roleLabel } from "@/lib/theme";
+import { isMaster } from "@/lib/access";
 import { SECTIONS, type SectionKey } from "./sections/registry";
 import { SectionNavContext } from "./nav";
 
@@ -43,14 +44,15 @@ export default function PortalShell() {
     role: "admin" as const,
     dept: "경영지원",
     init: "지",
+    email: "kyungjun.ji@bio-lj.com",
   };
   const meInit = me.init || me.name.charAt(0);
-  const isAdmin = me.role === "admin";
   const isManagerUp = me.role === "admin" || me.role === "manager";
-  // 파일 관리·재무 현황은 팀장급 이상만, 관리자 메뉴는 관리자만 노출
+  const meIsMaster = isMaster(me);
+  // 파일 관리·재무 현황은 팀장급 이상만, 관리자 메뉴는 마스터(지경준)만 노출
   const navSections = SECTIONS.filter((s) => {
     if (s.key === "files" || s.key === "finance") return isManagerUp;
-    if (s.key === "admin") return isAdmin;
+    if (s.key === "admin") return meIsMaster;
     return true;
   });
 
