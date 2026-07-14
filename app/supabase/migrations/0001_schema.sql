@@ -60,6 +60,7 @@ create table if not exists public.tasks (
   assignee    text default '',
   priority    text not null default '보통' check (priority in ('긴급', '높음', '보통')),
   due         date,
+  status      text not null default 'todo' check (status in ('todo', 'doing', 'review', 'done')),
   created_at  timestamptz not null default now()
 );
 

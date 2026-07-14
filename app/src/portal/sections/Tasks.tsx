@@ -15,9 +15,10 @@ import type {
   TaskStage,
   TaskComment,
   StageStatus,
+  TaskStatus,
 } from "@/types/database";
 
-const members = demoMembers;
+type Member = { name: string; dept: string; init: string | null; avatar_bg: string };
 
 const TASK_FILTERS = ["전체", "IT", "계약", "영업", "인허가", "물류", "마케팅"];
 
@@ -74,6 +75,8 @@ export default function Tasks() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // 담당자 후보: 실제 가입·승인된 직원만 (미설정 시 데모 명단)
+  const [members, setMembers] = useState<Member[]>(demoMembers as Member[]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -84,6 +87,11 @@ export default function Tasks() {
       .then(({ data }) => {
         if (data) setTasks(data as unknown as TaskFull[]);
       });
+    supabase
+      .from("profiles")
+      .select("name,dept,init,avatar_bg")
+      .eq("status", "approved")
+      .then(({ data }) => data && setMembers(data as Member[]));
   }, []);
 
   async function persist(fn: () => PromiseLike<unknown>) {
@@ -113,6 +121,12 @@ export default function Tasks() {
       ),
     );
     persist(() => supabase.from("task_stages").update({ status: next }).eq("id", stage.id));
+  }
+
+  // 칸반 상태(대기/진행중/검토/완료)를 담당자가 직접 지정
+  function setTaskStatus(taskId: string, status: TaskStatus) {
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
+    persist(() => supabase.from("tasks").update({ status }).eq("id", taskId));
   }
 
   async function addComment(taskId: string, idx: number) {
@@ -255,6 +269,7 @@ export default function Tasks() {
       assignee: te.assignee,
       priority: te.priority as TaskFull["priority"],
       due: te.due,
+      status: "todo",
       created_at: "",
       stages: stageNames.map((name, i) => ({
         id: genId(),
@@ -407,6 +422,7 @@ export default function Tasks() {
           onClose={() => setSelectedTaskId(null)}
           onEdit={editTask}
           onDelete={deleteTask}
+          onStatus={(st) => setTaskStatus(sel.id, st)}
           onToggle={(idx) => cycleStage(sel.id, idx)}
           onSend={(idx) => addComment(sel.id, idx)}
         />}
@@ -521,6 +537,7 @@ function TaskDetail({
   onClose,
   onEdit,
   onDelete,
+  onStatus,
   onToggle,
   onSend,
 }: {
@@ -530,11 +547,13 @@ function TaskDetail({
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onStatus: (st: TaskStatus) => void;
   onToggle: (idx: number) => void;
   onSend: (idx: number) => void;
 }) {
   const p = priorityStyle(task.priority);
   const fs = fieldStyle(task.field);
+  const cur = taskStatus(task);
   return (
     <div>
       <div style={{ position: "sticky", top: 0, background: "#fff", padding: "24px 30px 18px", borderBottom: "1px solid rgba(12,15,13,0.08)", zIndex: 2 }}>
@@ -568,6 +587,37 @@ function TaskDetail({
           </div>
           <div>
             <span style={{ color: "#84908A" }}>진행률</span> <b style={{ marginLeft: 6, color: "#0E7B4E" }}>{taskPct(task)}</b>
+          </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, color: "#84908A", fontWeight: 600, marginBottom: 8 }}>상태 변경</div>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {COLUMNS.map((col) => {
+              const on = cur === col.st;
+              return (
+                <button
+                  key={col.st}
+                  onClick={() => onStatus(col.st)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 14px",
+                    borderRadius: 20,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    border: `1.5px solid ${on ? col.color : "rgba(12,15,13,0.14)"}`,
+                    background: on ? col.color : "#fff",
+                    color: on ? "#fff" : "#5A5C65",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: on ? "#fff" : col.color }} />
+                  {col.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

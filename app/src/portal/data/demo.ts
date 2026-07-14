@@ -70,40 +70,40 @@ export const demoNotices: Notice[] = [
 ];
 
 export const demoTasks: TaskFull[] = [
-  { id: "1", title: "중국 첨단 의료기기 NMPA 인허가", country: "CN · 의료기기", field: "인허가", assignee: "박지원", priority: "긴급", due: "2026-07-22", created_at: "",
+  { id: "1", title: "중국 첨단 의료기기 NMPA 인허가", country: "CN · 의료기기", field: "인허가", assignee: "박지원", priority: "긴급", due: "2026-07-22", status: "doing", created_at: "",
     stages: [
       { id: "1a", task_id: "1", name: "제품 기술문서 준비", status: "done", sort: 0, comments: [{ id: "c1", stage_id: "1a", author: "박지원", init: "박", avatar_bg: "#0E7B4E", body: "기술문서 및 시험성적서 번역본 첨부 완료했습니다.", created_at: "7/2 10:12" }] },
       { id: "1b", task_id: "1", name: "NMPA 사전 적합성 검토", status: "done", sort: 1, comments: [{ id: "c2", stage_id: "1b", author: "지경준", init: "지", avatar_bg: "#2A6FDB", body: "현지 대행사 검토 통과. 본심사 진행합시다.", created_at: "7/6 15:40" }] },
       { id: "1c", task_id: "1", name: "본심사 신청 및 대응", status: "doing", sort: 2, comments: [{ id: "c3", stage_id: "1c", author: "박지원", init: "박", avatar_bg: "#0E7B4E", body: "추가 자료 요청 대응 중 — 라벨 샘플 재제출 필요.", created_at: "7/9 09:22" }] },
       { id: "1d", task_id: "1", name: "등록증 발급", status: "todo", sort: 3, comments: [] },
     ] },
-  { id: "2", title: "태국 필러 제품 수출 선적 (5,000ea)", country: "TH · 필러", field: "물류", assignee: "정우성", priority: "높음", due: "2026-07-14", created_at: "",
+  { id: "2", title: "태국 필러 제품 수출 선적 (5,000ea)", country: "TH · 필러", field: "물류", assignee: "정우성", priority: "높음", due: "2026-07-14", status: "review", created_at: "",
     stages: [
       { id: "2a", task_id: "2", name: "발주 확인 및 재고 배정", status: "done", sort: 0, comments: [{ id: "c4", stage_id: "2a", author: "정우성", init: "정", avatar_bg: "#C6803A", body: "5,000ea 재고 확보 완료.", created_at: "7/5 11:00" }] },
       { id: "2b", task_id: "2", name: "PL / CI 서류 작성", status: "doing", sort: 1, comments: [{ id: "c5", stage_id: "2b", author: "최민수", init: "최", avatar_bg: "#7A4DD1", body: "인보이스 단가 CIF 기준으로 통일 부탁해요.", created_at: "7/9 14:05" }] },
       { id: "2c", task_id: "2", name: "수출 통관 서류 제출", status: "todo", sort: 2, comments: [] },
       { id: "2d", task_id: "2", name: "선적 및 B/L 발행", status: "todo", sort: 3, comments: [] },
     ] },
-  { id: "3", title: "일본 K-뷰티 화장품 라벨 현지화", country: "JP · 화장품", field: "마케팅", assignee: "한소희", priority: "보통", due: "2026-07-28", created_at: "",
+  { id: "3", title: "일본 K-뷰티 화장품 라벨 현지화", country: "JP · 화장품", field: "마케팅", assignee: "한소희", priority: "보통", due: "2026-07-28", status: "doing", created_at: "",
     stages: [
       { id: "3a", task_id: "3", name: "전성분 일본어 표기 검수", status: "done", sort: 0, comments: [] },
       { id: "3b", task_id: "3", name: "약기법 라벨 규정 반영", status: "doing", sort: 1, comments: [{ id: "c6", stage_id: "3b", author: "한소희", init: "한", avatar_bg: "#D14D8B", body: "7월 시행 신규 라벨링 규정 반영 중입니다.", created_at: "7/8 16:30" }] },
       { id: "3c", task_id: "3", name: "현지 파트너 최종 승인", status: "todo", sort: 2, comments: [] },
     ] },
-  { id: "4", title: "중국 헬스케어 인프라 공급 계약", country: "CN · 장비", field: "계약", assignee: "최민수", priority: "높음", due: "2026-08-05", created_at: "",
+  { id: "4", title: "중국 헬스케어 인프라 공급 계약", country: "CN · 장비", field: "계약", assignee: "최민수", priority: "높음", due: "2026-08-05", status: "todo", created_at: "",
     stages: [
       { id: "4a", task_id: "4", name: "파트너사 실사 및 견적", status: "done", sort: 0, comments: [] },
       { id: "4b", task_id: "4", name: "계약 조건 협의", status: "doing", sort: 1, comments: [{ id: "c7", stage_id: "4b", author: "최민수", init: "최", avatar_bg: "#7A4DD1", body: "결제 조건 T/T 30% 선급 협의 중.", created_at: "7/7 13:10" }] },
       { id: "4c", task_id: "4", name: "계약서 작성 및 검토", status: "todo", sort: 2, comments: [] },
       { id: "4d", task_id: "4", name: "계약 체결", status: "todo", sort: 3, comments: [] },
     ] },
-  { id: "5", title: "태국 유통 IT 플랫폼 기획", country: "TH · IT", field: "IT", assignee: "지경준", priority: "보통", due: "2026-08-20", created_at: "",
+  { id: "5", title: "태국 유통 IT 플랫폼 기획", country: "TH · IT", field: "IT", assignee: "지경준", priority: "보통", due: "2026-08-20", status: "doing", created_at: "",
     stages: [
       { id: "5a", task_id: "5", name: "요구사항 정의", status: "done", sort: 0, comments: [] },
       { id: "5b", task_id: "5", name: "화면 설계 / 프로토타입", status: "doing", sort: 1, comments: [] },
       { id: "5c", task_id: "5", name: "개발 착수", status: "todo", sort: 2, comments: [] },
     ] },
-  { id: "6", title: "월간 수출 실적 리포트 작성", country: "전사", field: "영업", assignee: "김서연", priority: "보통", due: "2026-07-31", created_at: "",
+  { id: "6", title: "월간 수출 실적 리포트 작성", country: "전사", field: "영업", assignee: "김서연", priority: "보통", due: "2026-07-31", status: "todo", created_at: "",
     stages: [
       { id: "6a", task_id: "6", name: "데이터 취합", status: "todo", sort: 0, comments: [] },
       { id: "6b", task_id: "6", name: "리포트 작성", status: "todo", sort: 1, comments: [] },

@@ -6,6 +6,8 @@ export function taskPct(t: TaskFull): string {
 }
 
 export function taskStatus(t: TaskFull): "todo" | "doing" | "review" | "done" {
+  // 담당자가 직접 지정한 상태를 우선합니다. (없으면 단계 진행도로 추정 — 과거 데이터 대비)
+  if (t.status) return t.status;
   const done = t.stages.filter((s) => s.status === "done").length;
   if (done === 0) return "todo";
   if (done === t.stages.length) return "done";

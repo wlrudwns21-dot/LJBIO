@@ -37,6 +37,7 @@ export interface Notice {
 }
 
 export type StageStatus = "todo" | "doing" | "done";
+export type TaskStatus = "todo" | "doing" | "review" | "done";
 
 export interface Task {
   id: string;
@@ -46,6 +47,8 @@ export interface Task {
   assignee: string;
   priority: "긴급" | "높음" | "보통";
   due: string | null;
+  /** 칸반 상태(대기/진행중/검토/완료). 담당자가 직접 지정합니다. */
+  status: TaskStatus;
   created_at: string;
 }
 
