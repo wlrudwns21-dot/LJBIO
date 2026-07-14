@@ -104,7 +104,9 @@ export default function Files() {
   const meEmail = ((me as { email?: string }).email || "").toLowerCase();
   const canDelete = meMaster; // 문서 삭제는 마스터(지경준)만
   const canGrade = meMaster || role === "admin"; // 보안등급 변경은 관리자·마스터
-  const [files, setFiles] = useState<FileRow[]>(demoFiles);
+  const live = isSupabaseConfigured; // 실서버 모드면 더미 대신 로딩 표시
+  const [loading, setLoading] = useState(live);
+  const [files, setFiles] = useState<FileRow[]>(live ? [] : demoFiles);
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
   const [partnerNames, setPartnerNames] = useState<string[]>(
     demoPartners.map((p) => p.name),
@@ -132,7 +134,9 @@ export default function Files() {
         .eq("status", "approved")
         .order("created_at");
       if (mm) setMembers(mm as Member[]);
-    })().catch(() => {});
+    })()
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   // 보안등급별 열람 권한 (파일관리 접근은 이미 팀장급 이상으로 제한됨)
@@ -600,17 +604,45 @@ export default function Files() {
           );
         })}
 
-        {filtered.length === 0 && (
+        {loading ? (
           <div
             style={{
               padding: 40,
               textAlign: "center",
               color: "#84908A",
               fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
             }}
           >
-            이 사업 부문에 등록된 파일이 없습니다.
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                border: "2px solid rgba(14,123,78,0.25)",
+                borderTopColor: "#0E7B4E",
+                borderRadius: "50%",
+                display: "inline-block",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+            데이터를 불러오는 중…
           </div>
+        ) : (
+          filtered.length === 0 && (
+            <div
+              style={{
+                padding: 40,
+                textAlign: "center",
+                color: "#84908A",
+                fontSize: 14,
+              }}
+            >
+              등록된 파일이 없습니다.
+            </div>
+          )
         )}
       </div>
 

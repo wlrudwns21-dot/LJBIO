@@ -12,7 +12,9 @@ import {
   demoPending,
   demoConversations,
 } from "../data/demo";
-import type { TaskFull, Notice } from "@/types/database";
+import type { TaskFull, Notice, CalendarEvent } from "@/types/database";
+
+type DashEvent = CalendarEvent & { day?: string | null; mon?: string | null };
 
 const EVENT_COLOR: Record<string, string> = {
   회의: "#2A6FDB",
@@ -24,12 +26,18 @@ const EVENT_COLOR: Record<string, string> = {
 
 export default function Dashboard() {
   const go = useSectionNav();
-  const [tasks, setTasks] = useState<TaskFull[]>(demoTasks);
-  const [notices, setNotices] = useState<Notice[]>(demoNotices);
-  const [pendingCount, setPendingCount] = useState(demoPending.length);
-  const [pendingLeaves, setPendingLeaves] = useState(
-    demoLeaves.filter((l) => l.status === "pending").length,
+  // 실서버 모드에서는 더미 대신 빈 상태에서 시작해 로딩 후 실데이터로 채웁니다.
+  const live = isSupabaseConfigured;
+  const [tasks, setTasks] = useState<TaskFull[]>(live ? [] : demoTasks);
+  const [notices, setNotices] = useState<Notice[]>(live ? [] : demoNotices);
+  const [events, setEvents] = useState<DashEvent[]>(
+    live ? [] : (demoEvents as DashEvent[]),
   );
+  const [pendingCount, setPendingCount] = useState(live ? 0 : demoPending.length);
+  const [pendingLeaves, setPendingLeaves] = useState(
+    live ? 0 : demoLeaves.filter((l) => l.status === "pending").length,
+  );
+  const [loading, setLoading] = useState(live);
   const unread = demoConversations.reduce((a, d) => a + (d.unread || 0), 0);
 
   useEffect(() => {
@@ -42,11 +50,18 @@ export default function Dashboard() {
       if (t) setTasks(t as unknown as TaskFull[]);
       const { data: n } = await supabase.from("notices").select("*").order("created_at", { ascending: false });
       if (n) setNotices(n as Notice[]);
+      const { data: ev } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .order("event_date", { ascending: true });
+      if (ev) setEvents(ev as DashEvent[]);
       const { count: pc } = await supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "pending");
       setPendingCount(pc || 0);
       const { count: lc } = await supabase.from("leaves").select("*", { count: "exact", head: true }).eq("status", "pending");
       setPendingLeaves(lc || 0);
-    })().catch(() => {});
+    })()
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const active = tasks.filter((t) => taskStatus(t) !== "done");
@@ -57,7 +72,7 @@ export default function Dashboard() {
     { label: "안 읽은 메시지", value: String(unread), delta: "2개 대화", tone: "#2A6FDB" },
   ];
   const dashTasks = active.slice(0, 4);
-  const dashEvents = demoEvents.slice(0, 4);
+  const dashEvents = events.slice(0, 4);
   const dashNotices = notices.slice(0, 4);
 
   return (
@@ -79,6 +94,12 @@ export default function Dashboard() {
             <a onClick={() => go("tasks")} style={{ fontSize: 13, color: "#0E7B4E", fontWeight: 600, cursor: "pointer" }}>전체 보기 →</a>
           </div>
           <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+            {loading && (
+              <div style={{ padding: "12px 0", fontSize: 13, color: "#84908A" }}>불러오는 중…</div>
+            )}
+            {!loading && dashTasks.length === 0 && (
+              <div style={{ padding: "12px 0", fontSize: 13, color: "#84908A" }}>진행 중인 과제가 없습니다.</div>
+            )}
             {dashTasks.map((t) => {
               const p = priorityStyle(t.priority);
               const fs = fieldStyle(t.field);
@@ -111,18 +132,28 @@ export default function Dashboard() {
               <a onClick={() => go("schedule")} style={{ fontSize: 13, color: "#0E7B4E", fontWeight: 600, cursor: "pointer" }}>캘린더 →</a>
             </div>
             <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 2 }}>
-              {dashEvents.map((e) => (
-                <div key={e.id} style={{ display: "flex", gap: 14, padding: "11px 0", borderBottom: "1px solid rgba(12,15,13,0.06)" }}>
-                  <div style={{ textAlign: "center", minWidth: 42 }}>
-                    <div className="mono" style={{ fontSize: 17, fontWeight: 600, color: "#0E7B4E" }}>{e.day}</div>
-                    <div style={{ fontSize: 10, color: "#84908A" }}>{e.mon}</div>
-                  </div>
-                  <div style={{ borderLeft: `2px solid ${EVENT_COLOR[e.type]}`, paddingLeft: 12 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</div>
-                    <div style={{ fontSize: 12, color: "#84908A", marginTop: 2 }}>{e.time}</div>
-                  </div>
+              {loading ? (
+                <div style={{ padding: "18px 0", fontSize: 13, color: "#84908A" }}>
+                  일정을 불러오는 중…
                 </div>
-              ))}
+              ) : dashEvents.length === 0 ? (
+                <div style={{ padding: "18px 0", fontSize: 13, color: "#84908A" }}>
+                  예정된 일정이 없습니다.
+                </div>
+              ) : (
+                dashEvents.map((e) => (
+                  <div key={e.id} style={{ display: "flex", gap: 14, padding: "11px 0", borderBottom: "1px solid rgba(12,15,13,0.06)" }}>
+                    <div style={{ textAlign: "center", minWidth: 42 }}>
+                      <div className="mono" style={{ fontSize: 17, fontWeight: 600, color: "#0E7B4E" }}>{e.day}</div>
+                      <div style={{ fontSize: 10, color: "#84908A" }}>{e.mon}</div>
+                    </div>
+                    <div style={{ borderLeft: `2px solid ${EVENT_COLOR[e.type] || "#84908A"}`, paddingLeft: 12 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</div>
+                      <div style={{ fontSize: 12, color: "#84908A", marginTop: 2 }}>{e.time}</div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
           <div style={{ background: "linear-gradient(150deg,#0B0E0C,#0A1710)", borderRadius: 18, padding: 24, color: "#fff" }}>
@@ -149,6 +180,12 @@ export default function Dashboard() {
           <a onClick={() => go("notices")} style={{ fontSize: 13, color: "#0E7B4E", fontWeight: 600, cursor: "pointer" }}>전체 보기 →</a>
         </div>
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column" }}>
+          {loading && (
+            <div style={{ padding: "12px 8px", fontSize: 13, color: "#84908A" }}>불러오는 중…</div>
+          )}
+          {!loading && dashNotices.length === 0 && (
+            <div style={{ padding: "12px 8px", fontSize: 13, color: "#84908A" }}>등록된 공지가 없습니다.</div>
+          )}
           {dashNotices.map((n) => {
             const c = noticeTagStyle(n.tag);
             return (
