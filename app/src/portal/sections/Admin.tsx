@@ -164,10 +164,9 @@ export default function Admin() {
   }
   function reject(p: PendingRow) {
     setPending((list) => list.filter((x) => x.id !== p.id));
-    void persist(() =>
-      supabase.from("profiles").update({ status: "rejected" }).eq("id", p.id),
-    );
-    flash(p.name + " 신청을 거절했습니다");
+    // 프로필 + 로그인 계정까지 삭제 — 같은 이메일로 재가입할 수 있게
+    void persist(() => supabase.rpc("admin_delete_user", { p_profile_id: p.id }));
+    flash(p.name + " 신청을 거절했습니다 (재가입 가능)");
   }
 
   /* ------------------------------------------------------------ members */
@@ -175,8 +174,9 @@ export default function Admin() {
     if (!window.confirm(`'${m.name}' 직원 계정을 삭제할까요? 되돌릴 수 없습니다.`))
       return;
     setMembers((list) => list.filter((x) => (x.id || x.email) !== (m.id || m.email)));
-    if (m.id) void persist(() => supabase.from("profiles").delete().eq("id", m.id!));
-    flash(m.name + " 계정을 삭제했습니다");
+    // 프로필 + 로그인 계정까지 삭제 — 같은 이메일로 재가입할 수 있게
+    if (m.id) void persist(() => supabase.rpc("admin_delete_user", { p_profile_id: m.id }));
+    flash(m.name + " 계정을 삭제했습니다 (재가입 가능)");
   }
 
   const memberKey = (m: MemberRow) => m.id || m.email;
