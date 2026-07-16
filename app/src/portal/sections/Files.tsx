@@ -686,7 +686,7 @@ export default function Files() {
                 ×
               </span>
             </div>
-            <div style={{ padding: "22px 26px", display: "flex", flexDirection: "column", gap: 15 }}>
+            <div className="m-pad-lg" style={{ padding: "22px 26px", display: "flex", flexDirection: "column", gap: 15 }}>
               <div
                 style={{
                   display: "flex",
@@ -711,7 +711,7 @@ export default function Files() {
                   style={fld}
                 />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>유형</label>
                   <select
@@ -945,7 +945,7 @@ export default function Files() {
                 ×
               </span>
             </div>
-            <div style={{ padding: "22px 26px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="m-pad-lg" style={{ padding: "22px 26px", display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {GRADES.map((gr) => {
                   const on = secEdit.grade === gr.g;

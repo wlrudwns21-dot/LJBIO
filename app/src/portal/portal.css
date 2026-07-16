@@ -160,6 +160,40 @@
   .doc-paper table {
     font-size: 11px;
   }
+  /* ---- 공통 모바일 최적화 ---- */
+  /* 2단 입력 폼 → 1단 */
+  .g-form2 {
+    grid-template-columns: 1fr !important;
+  }
+  /* 필터 + 버튼 툴바 줄바꿈 허용 */
+  .g-toolbar {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  /* 품의서 4열 표(라벨/값 ×2) → 2열 */
+  .doc-grid4 {
+    grid-template-columns: 96px 1fr !important;
+  }
+  /* 큰 모달 내부 여백 축소 */
+  .m-pad-lg {
+    padding: 18px 16px !important;
+  }
+  .m-pad-md {
+    padding: 14px 16px !important;
+  }
+  /* 모달이 화면을 거의 꽉 채우도록 */
+  .modalwrap {
+    padding: 14px 8px !important;
+  }
+  /* iOS 사파리: 입력 포커스 시 자동 확대 방지(16px 미만이면 확대됨) */
+  .app-main input,
+  .app-main select,
+  .app-main textarea,
+  .modalwrap input,
+  .modalwrap select,
+  .modalwrap textarea {
+    font-size: 16px !important;
+  }
 }
 @media (min-width: 861px) and (max-width: 1120px) {
   .g-files {

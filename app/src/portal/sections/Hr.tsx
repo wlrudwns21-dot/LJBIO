@@ -178,7 +178,7 @@ export default function Hr() {
                   <option value="경조사">경조사</option>
                 </select>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>기간</label>
                   <input

@@ -358,7 +358,7 @@ export default function Docs() {
         <div style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 16, padding: 18 }}>
           <h4 style={{ fontSize: 13, fontWeight: 700, color: "#84908A", marginBottom: 12 }}>발행 정보</h4>
           <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 9 }}>
+            <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 9 }}>
               <div>
                 <label style={lbl}>문서 번호</label>
                 <input
@@ -377,7 +377,7 @@ export default function Docs() {
               <label style={lbl}>수출자 (Exporter)</label>
               <input className="fld" value={dfExporter} onChange={(e) => setDfExporter(e.target.value)} style={fld} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 9 }}>
+            <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 9 }}>
               <div>
                 <label style={lbl}>수입자 (Importer)</label>
                 <input className="fld" value={dfImporter} onChange={(e) => setDfImporter(e.target.value)} style={fld} />
@@ -392,7 +392,7 @@ export default function Docs() {
                 발행처 (레터헤드 · 서명)
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 9 }}>
+                <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 9 }}>
                   <div>
                     <label style={lbl}>회사명</label>
                     <input
@@ -510,7 +510,7 @@ export default function Docs() {
                       marginBottom: 8,
                     }}
                   />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+                  <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
                     <ItemField label="HS Code" value={it.hs} onChange={(v) => updItem(idx, "hs", v)} />
                     <ItemField
                       label="수량 (ea)"
@@ -687,7 +687,7 @@ export default function Docs() {
             </div>
           </div>
 
-          <div style={{ marginTop: 22, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26 }}>
+          <div className="g-form2" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "#84908A" }}>
                 EXPORTER / SHIPPER
@@ -760,7 +760,7 @@ export default function Docs() {
             </div>
           )}
 
-          <div style={{ marginTop: 36, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26, alignItems: "end" }}>
+          <div className="g-form2" style={{ marginTop: 36, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26, alignItems: "end" }}>
             <div style={{ fontSize: 10.5, color: "#84908A", lineHeight: 1.6 }}>{docNote}</div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 11, color: "#6B7280" }}>Authorized Signature</div>

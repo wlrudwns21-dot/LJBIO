@@ -543,6 +543,7 @@ export default function Partners() {
             </div>
 
             <div
+              className="m-pad-lg"
               style={{
                 padding: "22px 26px",
                 display: "flex",
@@ -561,7 +562,7 @@ export default function Partners() {
                   style={fld}
                 />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>대표자</label>
                   <input
@@ -582,7 +583,7 @@ export default function Partners() {
                   />
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>업태</label>
                   <input
@@ -613,7 +614,7 @@ export default function Partners() {
                   style={fld}
                 />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>대표 전화</label>
                   <input
@@ -637,7 +638,7 @@ export default function Partners() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>담당자명</label>
                   <input
@@ -668,7 +669,7 @@ export default function Partners() {
               >
                 분류 · 계약
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>사업 부문</label>
                   <select

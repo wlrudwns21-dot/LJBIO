@@ -712,6 +712,7 @@ export default function Mail() {
                 ← 목록으로
               </button>
               <div
+                className="m-pad-md"
                 style={{
                   padding: "20px 26px",
                   borderBottom: "1px solid rgba(12,15,13,0.08)",
@@ -722,6 +723,7 @@ export default function Mail() {
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "space-between",
+                    flexWrap: "wrap",
                     gap: 14,
                   }}
                 >
@@ -797,7 +799,7 @@ export default function Mail() {
                   </div>
                 </div>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 26px" }}>
+              <div className="m-pad-lg" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 26px" }}>
                 <div
                   style={{
                     fontSize: 14,

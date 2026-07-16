@@ -639,6 +639,7 @@ export default function Approvals() {
               </span>
             </div>
             <div
+              className="m-pad-lg"
               style={{
                 padding: "24px 26px",
                 display: "flex",
@@ -647,6 +648,7 @@ export default function Approvals() {
               }}
             >
               <div
+                className="g-form2"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
@@ -701,6 +703,7 @@ export default function Approvals() {
                 />
               </div>
               <div
+                className="g-form2"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
@@ -1172,7 +1175,7 @@ function ApprovalDetail({
           </div>
         </div>
 
-        <div style={{ padding: "30px 34px 8px" }}>
+        <div className="m-pad-lg" style={{ padding: "30px 34px 8px" }}>
           <div
             style={{
               display: "flex",
@@ -1410,6 +1413,7 @@ function ApprovalDetail({
           </h2>
           <div style={{ marginTop: 18, borderTop: "2px solid #0C0F0D" }}>
             <div
+              className="doc-grid4"
               style={{
                 display: "grid",
                 gridTemplateColumns: "120px 1fr 120px 1fr",
@@ -1443,6 +1447,7 @@ function ApprovalDetail({
               </div>
             </div>
             <div
+              className="doc-grid4"
               style={{
                 display: "grid",
                 gridTemplateColumns: "120px 1fr 120px 1fr",

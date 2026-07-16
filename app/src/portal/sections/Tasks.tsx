@@ -363,10 +363,13 @@ export default function Tasks() {
   return (
     <div className="fade" style={{ maxWidth: 1240, margin: "0 auto" }}>
       <div
+        className="g-toolbar"
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 10,
           marginBottom: 18,
         }}
       >
@@ -518,7 +521,7 @@ export default function Tasks() {
                 ×
               </span>
             </div>
-            <div style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 15 }}>
+            <div className="m-pad-lg" style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 15 }}>
               <div>
                 <label style={labelStyle}>과제명</label>
                 <input
@@ -528,7 +531,7 @@ export default function Tasks() {
                   style={inputStyle}
                 />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={labelStyle}>분야</label>
                   <select value={editor.field} onChange={(e) => setEditor({ ...editor, field: e.target.value })} style={selectStyle}>
@@ -550,7 +553,7 @@ export default function Tasks() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={labelStyle}>국가 · 분류</label>
                   <input
@@ -642,7 +645,7 @@ function TaskDetail({
   const cur = taskStatus(task);
   return (
     <div>
-      <div style={{ position: "sticky", top: 0, background: "#fff", padding: "24px 30px 18px", borderBottom: "1px solid rgba(12,15,13,0.08)", zIndex: 2 }}>
+      <div className="m-pad-md" style={{ position: "sticky", top: 0, background: "#fff", padding: "24px 30px 18px", borderBottom: "1px solid rgba(12,15,13,0.08)", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
@@ -708,7 +711,7 @@ function TaskDetail({
         </div>
       </div>
 
-      <div style={{ padding: "24px 30px 40px" }}>
+      <div className="m-pad-lg" style={{ padding: "24px 30px 40px" }}>
         <h3 style={{ fontSize: 14, fontWeight: 700, color: "#84908A", letterSpacing: "0.02em", marginBottom: 16 }}>단계별 진행 · 코멘트</h3>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {task.stages.map((s, idx) => {
