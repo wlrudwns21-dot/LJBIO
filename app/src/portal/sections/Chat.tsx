@@ -30,6 +30,33 @@ const cloneDemo = (): Conv[] =>
     messages: d.messages.map((m) => ({ ...m })) as ChatMsg[],
   }));
 
+/** ISO 타임스탬프 → "14:05" (오늘) / "7/15 14:05" (이전). 그 외 문자열은 그대로 */
+function fmtTime(s: string): string {
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  const hm =
+    String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  const now = new Date();
+  return d.toDateString() === now.toDateString()
+    ? hm
+    : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+}
+
+/** DB 메시지 행 → 화면 메시지 (본인 여부 판별 포함) */
+function mapMsgs(rows: unknown[], myProfileId?: string | null): ChatMsg[] {
+  return (rows || []).map((raw) => {
+    const m = raw as Record<string, unknown>;
+    return {
+      author: (m.author as string) || "",
+      init: (m.init as string) ?? null,
+      avatar_bg: (m.avatar_bg as string) || "#84908A",
+      body: (m.body as string) || "",
+      created_at: fmtTime(String(m.created_at || "")),
+      me: !!myProfileId && m.sender_id === myProfileId,
+    };
+  });
+}
+
 export default function Chat() {
   const { profile } = useAuth();
   const flash = useToast();
@@ -57,14 +84,7 @@ export default function Chat() {
           .select("*")
           .eq("conversation_id", c.id)
           .order("created_at", { ascending: true });
-        const messages: ChatMsg[] = (ms || []).map((m: any) => ({
-          author: m.author,
-          init: m.init,
-          avatar_bg: m.avatar_bg,
-          body: m.body,
-          created_at: m.created_at,
-          me: profile ? m.sender_id === profile.id : false,
-        }));
+        const messages = mapMsgs(ms || [], profile?.id);
         list.push({
           ...c,
           unread: 0,
@@ -85,6 +105,40 @@ export default function Chat() {
       .eq("status", "approved")
       .then(({ data }) => data && setMembers(data as Member[]));
   }, []);
+
+  // 실시간 수신: 열려있는 대화방을 4초마다 동기화 (상대방 메시지 반영)
+  useEffect(() => {
+    if (!isSupabaseConfigured || !activeId) return;
+    let stop = false;
+    const tick = async () => {
+      const { data: ms } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", activeId)
+        .order("created_at", { ascending: true });
+      if (stop || !ms) return;
+      const messages = mapMsgs(ms, profile?.id);
+      setConvs((prev) =>
+        prev.map((c) => {
+          if (c.id !== activeId) return c;
+          if (c.messages.length === messages.length) return c; // 변화 없음
+          const grew = messages.length > c.messages.length;
+          if (grew) scrollToBottom();
+          return {
+            ...c,
+            messages,
+            last: messages[messages.length - 1]?.created_at ?? c.last,
+          };
+        }),
+      );
+    };
+    const t = setInterval(tick, 4000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, profile?.id]);
 
   async function createConv() {
     if (!creator) return;

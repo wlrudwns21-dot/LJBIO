@@ -6,6 +6,7 @@ import {
   type SetStateAction,
 } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 import { priorityStyle, fieldStyle } from "@/lib/theme";
 import { Modal, useToast } from "../ui";
 import { taskPct, taskStatus, nextStageStatus } from "../data/taskUtils";
@@ -70,6 +71,11 @@ const labelStyle: CSSProperties = { fontSize: 12.5, color: "#4A4C55", fontWeight
 
 export default function Tasks() {
   const toast = useToast();
+  const { profile } = useAuth();
+  // 댓글 작성자 = 로그인한 사용자 (데모 모드에서만 지경준)
+  const meName = profile?.name ?? "지경준";
+  const meInit = profile?.init ?? meName.charAt(0);
+  const meBg = profile?.avatar_bg ?? "#0E7B4E";
   const [tasks, setTasks] = useState<TaskFull[]>(demoTasks);
   const [taskFilter, setTaskFilter] = useState("전체");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -207,9 +213,9 @@ export default function Tasks() {
     let comment: TaskComment = {
       id: genId(),
       stage_id: stage.id,
-      author: "지경준",
-      init: "지",
-      avatar_bg: "#0E7B4E",
+      author: meName,
+      init: meInit,
+      avatar_bg: meBg,
       body: text,
       created_at: "방금",
     };
@@ -217,7 +223,7 @@ export default function Tasks() {
       try {
         const { data } = await supabase
           .from("task_comments")
-          .insert({ stage_id: stage.id, author: "지경준", init: "지", avatar_bg: "#0E7B4E", body: text })
+          .insert({ stage_id: stage.id, author: meName, init: meInit, avatar_bg: meBg, body: text })
           .select()
           .single();
         if (data) comment = data as TaskComment;
