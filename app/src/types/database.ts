@@ -137,6 +137,8 @@ export interface ApprovalStep {
   is_ceo?: boolean;
   status: ApprovalStatus; // pending | approved | rejected
   acted_at?: string | null;
+  /** 승인/반려 시 남긴 의견 */
+  comment?: string | null;
 }
 
 export interface Approval {

@@ -80,7 +80,7 @@ export function Modal({
         background: "rgba(6,10,8,0.5)",
         backdropFilter: "blur(3px)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
         padding: 20,
         overflowY: "auto",
@@ -92,8 +92,8 @@ export function Modal({
         style={{
           width: "100%",
           maxWidth: width,
-          maxHeight: "92vh",
-          overflowY: "auto",
+          // 세로 중앙정렬 대신 margin auto: 짧으면 가운데, 길면 위부터 스크롤(잘림 방지)
+          margin: "auto 0",
           background: "#fff",
           borderRadius: 20,
           padding: padded ? 28 : 0,

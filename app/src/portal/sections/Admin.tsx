@@ -458,7 +458,7 @@ export default function Admin() {
             return (
               <div
                 key={p.id}
-                className="row-h"
+                className="row-h adm-row"
                 style={{
                   display: "flex",
                   alignItems: "center",

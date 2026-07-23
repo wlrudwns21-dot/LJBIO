@@ -274,11 +274,16 @@ export default function Approvals() {
   }
 
   /** 현재 단계 승인/반려 — 마지막(대표자) 승인 시 문서가 최종 승인 처리됩니다. */
-  function decide(a: Approval, action: "approved" | "rejected") {
+  function decide(a: Approval, action: "approved" | "rejected", comment = "") {
     const line = [...(a.approval_line || [])];
     const idx = currentStepIdx(a);
     if (idx < 0) return;
-    line[idx] = { ...line[idx], status: action, acted_at: TODAY_STR };
+    line[idx] = {
+      ...line[idx],
+      status: action,
+      acted_at: TODAY_STR,
+      comment: comment.trim() || null,
+    };
     const isLast = idx === line.length - 1;
     let status: Approval["status"] = a.status;
     let approver = a.approver;
@@ -590,9 +595,10 @@ export default function Approvals() {
             background: "rgba(6,10,8,0.55)",
             backdropFilter: "blur(4px)",
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "center",
-            padding: 24,
+            padding: "24px 18px",
+            overflowY: "auto",
           }}
         >
           <div
@@ -601,11 +607,10 @@ export default function Approvals() {
             style={{
               width: 580,
               maxWidth: "100%",
+              margin: "auto 0",
               background: "#fff",
               borderRadius: 18,
               overflow: "hidden",
-              maxHeight: "92vh",
-              overflowY: "auto",
             }}
           >
             <div
@@ -1012,8 +1017,8 @@ export default function Approvals() {
             });
             setSelId(null);
           }}
-          onApprove={() => decide(sel, "approved")}
-          onReject={() => decide(sel, "rejected")}
+          onApprove={(c) => decide(sel, "approved", c)}
+          onReject={(c) => decide(sel, "rejected", c)}
         />
       )}
     </div>
@@ -1043,9 +1048,10 @@ function ApprovalDetail({
   segColor: (id: string | null) => string;
   onClose: () => void;
   onEdit: () => void;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove: (comment: string) => void;
+  onReject: (comment: string) => void;
 }) {
+  const [opinion, setOpinion] = useState("");
   const tm = apTypeMeta[a.type] || apTypeMeta["일반"];
   const isApproved = a.status === "approved";
   const isRejected = a.status === "rejected";
@@ -1190,6 +1196,7 @@ function ApprovalDetail({
                 {"LJ-AP-2026-" + String(a.seq).padStart(4, "0")}
               </div>
               <h1
+                className="doc-title"
                 style={{
                   fontSize: 26,
                   fontWeight: 700,
@@ -1572,6 +1579,76 @@ function ApprovalDetail({
             </div>
           )}
 
+          {/* 결재 의견 (승인/반려 시 남긴 코멘트) */}
+          {line.some((s) => s.comment) && (
+            <div style={{ marginTop: 22 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#84908A",
+                  letterSpacing: "0.02em",
+                  marginBottom: 9,
+                }}
+              >
+                결재 의견
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {line
+                  .filter((s) => s.comment)
+                  .map((s, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        background: s.status === "rejected" ? "#FDF3F1" : "#F4F7F5",
+                        borderRadius: 10,
+                        padding: "10px 13px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          background: s.avatar_bg || "#84908A",
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#fff",
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {s.init || s.name.charAt(0)}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>
+                          {s.name}
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: s.status === "rejected" ? "#C4553E" : "#3E8E68",
+                            }}
+                          >
+                            {s.status === "rejected" ? "반려" : "승인"}
+                            {s.acted_at ? " · " + s.acted_at : ""}
+                          </span>
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 13, lineHeight: 1.55, color: "#3A3C45", whiteSpace: "pre-wrap" }}>
+                          {s.comment}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {isPending && curStep && (
             <div
               style={{
@@ -1615,48 +1692,69 @@ function ApprovalDetail({
 
         {canAct && (
           <div
+            className="m-pad-md"
             style={{
               marginTop: 18,
               padding: "16px 28px",
               borderTop: "1px solid rgba(12,15,13,0.08)",
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 10,
               background: "#FAFBFA",
             }}
           >
-            <button
-              onClick={onReject}
-              className="gbtn"
+            <label style={{ fontSize: 12.5, fontWeight: 600, color: "#4A4C55" }}>
+              결재 의견 <span style={{ color: "#9AA29C", fontWeight: 500 }}>(선택 · 승인/반려와 함께 기록됩니다)</span>
+            </label>
+            <textarea
+              value={opinion}
+              onChange={(e) => setOpinion(e.target.value)}
+              placeholder="예: 검토 완료, 승인합니다 / 견적서 재확인 후 재상신 바랍니다"
               style={{
-                padding: "12px 22px",
-                border: "1px solid rgba(196,85,62,0.35)",
+                marginTop: 6,
+                width: "100%",
+                minHeight: 64,
+                padding: "10px 13px",
+                border: "1.5px solid rgba(12,15,13,0.12)",
                 borderRadius: 10,
+                fontSize: 13.5,
+                lineHeight: 1.55,
+                resize: "vertical",
+                display: "block",
                 background: "#fff",
-                color: "#C4553E",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
               }}
-            >
-              반려
-            </button>
-            <button
-              onClick={onApprove}
-              className="pbtn"
-              style={{
-                padding: "12px 26px",
-                border: "none",
-                borderRadius: 10,
-                background: "linear-gradient(110deg,#0E7B4E,#46D08A)",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {curIsCeo ? "✓ 최종 승인 및 날인" : "✓ 이 단계 승인"}
-            </button>
+            />
+            <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={() => onReject(opinion)}
+                className="gbtn"
+                style={{
+                  padding: "12px 22px",
+                  border: "1px solid rgba(196,85,62,0.35)",
+                  borderRadius: 10,
+                  background: "#fff",
+                  color: "#C4553E",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                반려
+              </button>
+              <button
+                onClick={() => onApprove(opinion)}
+                className="pbtn"
+                style={{
+                  padding: "12px 26px",
+                  border: "none",
+                  borderRadius: 10,
+                  background: "linear-gradient(110deg,#0E7B4E,#46D08A)",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {curIsCeo ? "✓ 최종 승인 및 날인" : "✓ 이 단계 승인"}
+              </button>
+            </div>
           </div>
         )}
         {!isPending && (
