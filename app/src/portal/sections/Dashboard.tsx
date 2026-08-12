@@ -65,15 +65,39 @@ export default function Dashboard() {
   }, []);
 
   const active = tasks.filter((t) => taskStatus(t) !== "done");
+  // 실데이터 기준 통계 (예시 숫자 제거)
+  const statToday = new Date().toISOString().slice(0, 10);
+  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const dueThisWeek = active.filter(
+    (t) => t.due && t.due >= statToday && t.due <= weekEnd,
+  );
+  const urgent = active.filter((t) => t.priority === "긴급");
+  const upcomingCount = events.filter(
+    (e) => (e.event_date || "").slice(0, 10) >= statToday,
+  ).length;
   const stats = [
-    { label: "진행 중 과제", value: String(active.length), delta: "▲ 2 이번 주", tone: "#0E7B4E" },
-    { label: "이번 주 마감", value: "3", delta: "긴급 1건", tone: "#C6803A" },
+    { label: "진행 중 과제", value: String(active.length), delta: "전체 " + tasks.length + "건", tone: "#0E7B4E" },
+    { label: "이번 주 마감", value: String(dueThisWeek.length), delta: "긴급 " + urgent.length + "건", tone: "#C6803A" },
     { label: "승인 대기", value: String(pendingCount + pendingLeaves), delta: "가입·휴가 포함", tone: "#84908A" },
-    { label: "안 읽은 메시지", value: String(unread), delta: "2개 대화", tone: "#2A6FDB" },
+    { label: "다가오는 일정", value: String(isSupabaseConfigured ? upcomingCount : unread), delta: isSupabaseConfigured ? "오늘 이후" : "2개 대화", tone: "#2A6FDB" },
   ];
   const dashTasks = active.slice(0, 4);
-  const dashEvents = events.slice(0, 4);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // 오늘 이후 일정만, 날짜순 상위 4개
+  const dashEvents = [...events]
+    .filter((e) => (e.event_date || "").slice(0, 10) >= todayStr || (!e.event_date && e.day))
+    .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""))
+    .slice(0, 4);
   const dashNotices = notices.slice(0, 4);
+  const MON_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const evDay = (e: DashEvent) => {
+    const d = e.event_date ? new Date(e.event_date) : null;
+    return d && !isNaN(d.getTime()) ? String(d.getDate()) : e.day || "";
+  };
+  const evMon = (e: DashEvent) => {
+    const d = e.event_date ? new Date(e.event_date) : null;
+    return d && !isNaN(d.getTime()) ? MON_ABBR[d.getMonth()] : e.mon || "";
+  };
 
   return (
     <div className="fade" style={{ maxWidth: 1240, margin: "0 auto" }}>
@@ -144,8 +168,8 @@ export default function Dashboard() {
                 dashEvents.map((e) => (
                   <div key={e.id} style={{ display: "flex", gap: 14, padding: "11px 0", borderBottom: "1px solid rgba(12,15,13,0.06)" }}>
                     <div style={{ textAlign: "center", minWidth: 42 }}>
-                      <div className="mono" style={{ fontSize: 17, fontWeight: 600, color: "#0E7B4E" }}>{e.day}</div>
-                      <div style={{ fontSize: 10, color: "#84908A" }}>{e.mon}</div>
+                      <div className="mono" style={{ fontSize: 17, fontWeight: 600, color: "#0E7B4E" }}>{evDay(e)}</div>
+                      <div style={{ fontSize: 10, color: "#84908A" }}>{evMon(e)}</div>
                     </div>
                     <div style={{ borderLeft: `2px solid ${EVENT_COLOR[e.type] || "#84908A"}`, paddingLeft: 12 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</div>

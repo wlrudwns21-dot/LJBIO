@@ -7,37 +7,110 @@ import { isMaster } from "@/lib/access";
 import { SECTIONS, type SectionKey } from "./sections/registry";
 import { SectionNavContext } from "./nav";
 
-type Badges = Partial<
-  Record<"chat" | "mail" | "approvals" | "hr" | "admin" | "inquiries", number>
->;
+type Badges = Partial<Record<string, number>>;
 
 const DEMO_BADGES: Badges = { chat: 5, mail: 2, approvals: 3, hr: 2, admin: 3, inquiries: 1 };
 
-function useNavBadges(): Badges {
+/** 계정별 새 항목 뱃지 — 각 섹션의 '마지막 확인 시각(section_seen)' 이후
+ *  등록된 건수를 세고, 그 계정이 메뉴를 열면 확인 시각을 갱신해 뱃지를 지웁니다.
+ *  계정마다 확인 기록이 달라 뱃지도 계정별로 다르게 표시됩니다. */
+const SEEN_DEFS: {
+  key: SectionKey;
+  table: string;
+  /** 본인이 등록한 건 제외하는 필터 */
+  exclude?: (q: any, me: { id: string; name: string }) => any;
+}[] = [
+  { key: "notices", table: "notices" },
+  { key: "inquiries", table: "inquiries" },
+  { key: "tasks", table: "tasks" },
+  { key: "schedule", table: "calendar_events" },
+  { key: "chat", table: "messages", exclude: (q, me) => q.neq("sender_id", me.id) },
+  { key: "approvals", table: "approvals", exclude: (q, me) => q.neq("drafter", me.name) },
+  { key: "files", table: "files", exclude: (q, me) => q.neq("uploader", me.name) },
+  { key: "partners", table: "partners" },
+  { key: "hr", table: "leaves", exclude: (q, me) => q.neq("name", me.name) },
+];
+
+const EPOCH = "1970-01-01T00:00:00Z";
+
+function useNavBadges(profile: { id: string; name: string } | null) {
   const [b, setB] = useState<Badges>(isSupabaseConfigured ? {} : DEMO_BADGES);
+
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    (async () => {
-      const count = async (table: string, filter: (q: any) => any) =>
-        (await filter(supabase.from(table).select("*", { count: "exact", head: true }))).count || 0;
-      const [mail, approvals, hr, admin, inquiries] = await Promise.all([
-        count("mails", (q) => q.eq("folder", "inbox").eq("unread", true)),
-        count("approvals", (q) => q.eq("status", "pending")),
-        count("leaves", (q) => q.eq("status", "pending")),
-        count("profiles", (q) => q.eq("status", "pending")),
-        count("inquiries", (q) => q.eq("status", "new")),
-      ]);
-      setB({ mail, approvals, hr, admin, inquiries });
-    })().catch(() => {});
-  }, []);
-  return b;
+    if (!isSupabaseConfigured || !profile?.id) return;
+    let stop = false;
+    const load = async () => {
+      try {
+        const { data: seenRows } = await supabase
+          .from("section_seen")
+          .select("section,seen_at")
+          .eq("profile_id", profile.id);
+        const seen = Object.fromEntries(
+          ((seenRows || []) as { section: string; seen_at: string }[]).map((r) => [
+            r.section,
+            r.seen_at,
+          ]),
+        );
+        const counts = await Promise.all([
+          ...SEEN_DEFS.map(async (d) => {
+            let q: any = supabase
+              .from(d.table)
+              .select("*", { count: "exact", head: true })
+              .gt("created_at", seen[d.key] || EPOCH);
+            if (d.exclude) q = d.exclude(q, profile);
+            const { count } = await q;
+            return [d.key, count || 0] as const;
+          }),
+          // 관리자: 가입 승인 대기(처리 전까지 유지) · 메일: 안 읽음
+          (async () => {
+            const { count } = await supabase
+              .from("profiles")
+              .select("*", { count: "exact", head: true })
+              .eq("status", "pending");
+            return ["admin", count || 0] as const;
+          })(),
+          (async () => {
+            const { count } = await supabase
+              .from("mails")
+              .select("*", { count: "exact", head: true })
+              .eq("folder", "inbox")
+              .eq("unread", true);
+            return ["mail", count || 0] as const;
+          })(),
+        ]);
+        if (!stop) setB(Object.fromEntries(counts));
+      } catch {
+        /* ignore */
+      }
+    };
+    load();
+    const t = setInterval(load, 60000); // 1분마다 갱신
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [profile?.id]);
+
+  const markSeen = (k: SectionKey) => {
+    setB((prev) => (prev[k] ? { ...prev, [k]: 0 } : prev));
+    if (isSupabaseConfigured && profile?.id && SEEN_DEFS.some((d) => d.key === k)) {
+      supabase
+        .from("section_seen")
+        .upsert({ profile_id: profile.id, section: k, seen_at: new Date().toISOString() })
+        .then(() => {});
+    }
+  };
+
+  return { badges: b, markSeen };
 }
 
 export default function PortalShell() {
   const { profile, logout } = useAuth();
   const [section, setSection] = useState<SectionKey>("dashboard");
   const [drawer, setDrawer] = useState(false);
-  const badges = useNavBadges();
+  const { badges, markSeen } = useNavBadges(
+    profile ? { id: profile.id, name: profile.name } : null,
+  );
 
   const me = profile ?? {
     name: "지경준",
@@ -65,6 +138,7 @@ export default function PortalShell() {
   const go = (k: SectionKey) => {
     setSection(k);
     setDrawer(false);
+    markSeen(k); // 이 계정의 확인 기록 → 뱃지 제거 (계정별 독립)
   };
 
   return (
@@ -104,7 +178,7 @@ export default function PortalShell() {
         <nav style={{ flex: 1, overflowY: "auto", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 3 }}>
           {navSections.map((s) => {
             const on = s.key === section;
-            const badge = s.badge ? badges[s.badge] || 0 : 0;
+            const badge = badges[s.key] || 0;
             return (
               <a
                 key={s.key}
