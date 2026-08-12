@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { asFiles } from "@/lib/access";
 import { storeUpload, downloadAttachment } from "@/lib/storage";
-import { useToast } from "../ui";
+import { useToast, ModalWrap } from "../ui";
 import { demoPartners, demoContractTypes, demoSegments } from "../data/demo";
 import type { Partner, Segment, ContractType, Attachment } from "@/types/database";
 
@@ -241,7 +241,7 @@ export default function Partners() {
           partners.reduce((a, p) => Math.max(a, Number(p.id) || 0), 0) + 1,
         );
         setPartners((ps) => [
-          { ...payload, id: nid, created_at: "2026-07-11" } as Partner,
+          { ...payload, id: nid, created_at: new Date().toISOString().slice(0, 10) } as Partner,
           ...ps,
         ]);
       }
@@ -491,7 +491,7 @@ export default function Partners() {
       </div>
 
       {editor && (
-        <div
+        <ModalWrap
           className="modalwrap"
           onClick={() => setEditor(null)}
           style={{
@@ -1015,7 +1015,7 @@ export default function Partners() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrap>
       )}
     </div>
   );

@@ -283,7 +283,7 @@ export default function Mail() {
       unread: false,
       starred: false,
       attachments: [],
-      sent_at: "2026-07-11T00:00:00",
+      sent_at: new Date().toISOString(),
     };
     setMails((ms) => [nm, ...ms]);
     setJustSent((s) => new Set(s).add(nid));

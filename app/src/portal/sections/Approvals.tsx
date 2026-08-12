@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster, DEFAULT_CEO } from "@/lib/access";
 import { storeUpload, downloadAttachment } from "@/lib/storage";
-import { useToast } from "../ui";
+import { useToast, ModalWrap } from "../ui";
 import { demoApprovals, demoSegments, demoMe, demoMembers } from "../data/demo";
 import type { Approval, Segment, ApprovalStep, Attachment } from "@/types/database";
 
@@ -19,7 +19,7 @@ type Approver = {
   is_ceo?: boolean;
 };
 
-const TODAY_STR = "2026-07-11";
+const TODAY_STR = new Date().toISOString().slice(0, 10); // 오늘 날짜
 const stepFrom = (m: Approver, isCeo = false): ApprovalStep => ({
   name: m.name,
   email: m.email,
@@ -54,9 +54,9 @@ const stMeta: Record<string, { label: string; bg: string; color: string }> = {
   rejected: { label: "반려", bg: "#FDE8E8", color: "#D14343" },
 };
 
-const TODAY = new Date("2026-07-11");
+const TODAY = new Date(new Date().toDateString()); // 오늘 0시
 const dday = (due: string | null) =>
-  Math.round((new Date(due || "2026-07-11").getTime() - TODAY.getTime()) / 86400000);
+  Math.round((new Date(due || TODAY_STR).getTime() - TODAY.getTime()) / 86400000);
 
 const selStyle: CSSProperties = {
   marginTop: 6,
@@ -179,7 +179,7 @@ export default function Approvals() {
       title: "",
       segId: segments[0]?.id || "wholesale",
       amount: "",
-      due: "2026-07-20",
+      due: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), // 기본 기한: 7일 뒤
       content: "",
       line: [],
       attachments: [],
@@ -585,7 +585,7 @@ export default function Approvals() {
 
       {/* ============ APPROVAL EDITOR MODAL ============ */}
       {editor && (
-        <div
+        <ModalWrap
           className="modalwrap"
           onClick={() => setEditor(null)}
           style={{
@@ -987,7 +987,7 @@ export default function Approvals() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrap>
       )}
 
       {/* ============ APPROVAL DETAIL MODAL ============ */}
@@ -1078,7 +1078,7 @@ function ApprovalDetail({
   const attachments = a.attachments || [];
 
   return (
-    <div
+    <ModalWrap
       className="modalwrap"
       onClick={onClose}
       style={{
@@ -1776,7 +1776,7 @@ function ApprovalDetail({
           </div>
         )}
       </div>
-    </div>
+    </ModalWrap>
   );
 }
 

@@ -256,5 +256,9 @@ export interface CalendarEvent {
   day: string | null;
   mon: string | null;
   time: string;
+  /** 회의 결과(회의록) */
+  minutes?: string;
+  minutes_author?: string;
+  minutes_at?: string | null;
   created_at: string;
 }

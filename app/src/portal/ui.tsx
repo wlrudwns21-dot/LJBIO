@@ -6,7 +6,15 @@ import {
   useCallback,
   type ReactNode,
   type CSSProperties,
+  type ComponentProps,
 } from "react";
+import { createPortal } from "react-dom";
+
+/** 팝업을 body 바로 아래에 렌더링 — 앱 레이아웃(상단바·사이드바) 위에
+ *  항상 온전히 표시되도록 합니다. (레이아웃 내부에 렌더되면 상단이 가려짐) */
+export function ModalWrap(props: ComponentProps<"div">) {
+  return createPortal(<div {...props} />, document.body);
+}
 
 /* ------------------------------------------------------------------ Toast */
 const ToastContext = createContext<(msg: string) => void>(() => {});
@@ -69,7 +77,7 @@ export function Modal({
   padded?: boolean;
 }) {
   if (!open) return null;
-  return (
+  return createPortal(
     <div
       className="modalwrap"
       onClick={onClose}
@@ -102,7 +110,8 @@ export function Modal({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

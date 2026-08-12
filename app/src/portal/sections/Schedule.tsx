@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 import { Modal, useToast } from "../ui";
 import { demoEvents } from "../data/demo";
 import type { CalendarEvent } from "@/types/database";
@@ -26,7 +27,14 @@ const MON_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP",
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const bg = (t: string) => EV_BG[t] || EV_BG["기타"];
 
-type Editor = { id?: string; title: string; type: string; event_date: string; time: string };
+type Editor = {
+  id?: string;
+  title: string;
+  type: string;
+  event_date: string;
+  time: string;
+  minutes: string; // 회의 결과(회의록)
+};
 const fld: React.CSSProperties = {
   marginTop: 5,
   width: "100%",
@@ -39,6 +47,7 @@ const lbl: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, color: "#4A4
 
 export default function Schedule() {
   const flash = useToast();
+  const { profile } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>(demoEvents);
   const [editor, setEditor] = useState<Editor | null>(null);
 
@@ -81,11 +90,22 @@ export default function Schedule() {
       flash("제목을 입력하세요");
       return;
     }
+    const minutes = editor.minutes.trim();
+    const prevMinutes =
+      (editor.id && events.find((e) => e.id === editor.id)?.minutes) || "";
     const row = {
       title: editor.title.trim(),
       type: editor.type,
       event_date: editor.event_date,
       time: editor.time.trim() || "종일",
+      minutes,
+      // 회의록이 새로 작성/변경된 경우 작성자·작성일 기록
+      ...(minutes && minutes !== prevMinutes
+        ? {
+            minutes_author: profile?.name ?? "지경준",
+            minutes_at: new Date().toISOString().slice(0, 10),
+          }
+        : {}),
     };
     if (editor.id) {
       setEvents((prev) =>
@@ -122,7 +142,7 @@ export default function Schedule() {
   }
 
   const openNew = (dateStr: string) =>
-    setEditor({ title: "", type: "회의", event_date: dateStr, time: "" });
+    setEditor({ title: "", type: "회의", event_date: dateStr, time: "", minutes: "" });
   const openEdit = (e: CalendarEvent) =>
     setEditor({
       id: e.id,
@@ -130,6 +150,7 @@ export default function Schedule() {
       type: e.type,
       event_date: (e.event_date || todayStr).slice(0, 10),
       time: e.time || "",
+      minutes: e.minutes || "",
     });
 
   // build 42-cell grid for the viewed month
@@ -236,6 +257,7 @@ export default function Schedule() {
                         cursor: "pointer",
                       }}
                     >
+                      {ev.minutes ? "📝 " : ""}
                       {ev.title}
                     </div>
                   );
@@ -293,7 +315,10 @@ export default function Schedule() {
                     </div>
                   </div>
                   <div style={{ flex: 1, borderLeft: `2px solid ${color}`, paddingLeft: 11 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {e.minutes ? "📝 " : ""}
+                      {e.title}
+                    </div>
                     <div style={{ fontSize: 11.5, color: "#84908A", marginTop: 2 }}>
                       {e.time} · {e.type}
                     </div>
@@ -366,6 +391,32 @@ export default function Schedule() {
                   style={fld}
                 />
               </div>
+              {editor.id && (
+                <div>
+                  <label style={lbl}>
+                    📝 회의 결과 (회의록){" "}
+                    <span style={{ color: "#9AA29C", fontWeight: 500 }}>
+                      — 일정 종료 후 결과를 기록하세요
+                    </span>
+                  </label>
+                  <textarea
+                    className="fld"
+                    value={editor.minutes}
+                    onChange={(e) => setEditor({ ...editor, minutes: e.target.value })}
+                    placeholder={"예)\n· 참석: 지경준, 최민수\n· 결정사항: 태국 초도물량 5,000ea 확정\n· 후속조치: 계약서 수정 후 재발송 (담당 최민수)"}
+                    style={{ ...fld, minHeight: 130, lineHeight: 1.6, resize: "vertical", display: "block" }}
+                  />
+                  {(() => {
+                    const ev = events.find((x) => x.id === editor.id);
+                    return ev?.minutes && ev.minutes_author ? (
+                      <div style={{ marginTop: 5, fontSize: 11.5, color: "#84908A" }}>
+                        마지막 작성: {ev.minutes_author}
+                        {ev.minutes_at ? " · " + ev.minutes_at : ""}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
             <div style={{ marginTop: 22, display: "flex", alignItems: "center", gap: 10 }}>
               {editor.id && (

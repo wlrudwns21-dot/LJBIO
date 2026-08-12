@@ -107,7 +107,7 @@ export default function Docs() {
   const [dfExporter, setDfExporter] = useState("LJ-BIO INC. (엘제이바이오)");
   const [dfImporter, setDfImporter] = useState("Bangkok MediTrade Co., Ltd.");
   const [dfCountry, setDfCountry] = useState("Thailand");
-  const [dfDate, setDfDate] = useState("2026-07-14");
+  const [dfDate, setDfDate] = useState(new Date().toISOString().slice(0, 10));
   const [docItems, setDocItems] = useState<Item[]>([
     { desc: "Hyaluronic Acid Dermal Filler 1ml", hs: "3304.99", qty: 2000, nw: 24, gw: 31, unit: 18 },
     { desc: "Hyaluronic Acid Dermal Filler 2ml", hs: "3304.99", qty: 3000, nw: 54, gw: 66, unit: 27 },

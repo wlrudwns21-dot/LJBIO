@@ -3,7 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster } from "@/lib/access";
 import { storeUpload, storedValue, attFrom, downloadAttachment } from "@/lib/storage";
-import { useToast } from "../ui";
+import { useToast, ModalWrap } from "../ui";
 import { demoFiles, demoSegments, demoMe, demoPartners, demoMembers } from "../data/demo";
 import type { FileRow, Segment } from "@/types/database";
 
@@ -642,7 +642,7 @@ export default function Files() {
 
       {/* ============ 업로드 · 저장 설정 모달 ============ */}
       {upload && (
-        <div
+        <ModalWrap
           className="modalwrap"
           onClick={() => setUpload(null)}
           style={{
@@ -902,12 +902,12 @@ export default function Files() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrap>
       )}
 
       {/* ============ 보안등급 변경 모달 ============ */}
       {secEdit && (
-        <div
+        <ModalWrap
           className="modalwrap"
           onClick={() => setSecEdit(null)}
           style={{
@@ -1056,7 +1056,7 @@ export default function Files() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrap>
       )}
     </div>
   );

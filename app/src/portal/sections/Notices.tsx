@@ -7,7 +7,7 @@ import type { Notice } from "@/types/database";
 
 const NOTICE_FILTERS = ["전체", "중요", "규정", "일반"];
 const NOTICE_TAGS = ["중요", "계약", "규정", "시스템", "인사"];
-const TODAY = "2026-07-11";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 const catOf = (t: string) => (t === "중요" ? "중요" : t === "규정" ? "규정" : "일반");
 
