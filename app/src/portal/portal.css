@@ -223,3 +223,53 @@
     grid-auto-columns: 86%;
   }
 }
+
+/* ============================ A4 문서 시트 ============================ */
+.a4sheet {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(12, 15, 13, 0.08);
+}
+.a4sheet [contenteditable]:hover {
+  background: rgba(36, 86, 217, 0.06);
+  border-radius: 2px;
+}
+.a4sheet [contenteditable]:focus {
+  background: rgba(36, 86, 217, 0.1);
+  border-radius: 2px;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #a4doc,
+  #a4doc * {
+    visibility: visible !important;
+  }
+  #a4doc {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 9999 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .a4sheet [contenteditable]:hover,
+  .a4sheet [contenteditable]:focus {
+    background: transparent !important;
+  }
+}

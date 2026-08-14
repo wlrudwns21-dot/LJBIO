@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import TradeDocs, { type TradeDocType } from "./TradeDocs";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { attFrom, downloadAttachment } from "@/lib/storage";
 import { useToast } from "../ui";
@@ -12,6 +13,7 @@ type CtTemplate = {
 };
 
 type DocType = "PL" | "CI" | "EX" | "INV" | "CT";
+type AnyDocType = DocType | TradeDocType;
 type Mode = "packing" | "money" | "contract";
 
 interface Item {
@@ -27,12 +29,13 @@ interface Clause {
   content: string;
 }
 
-const DOC_TYPES: { k: DocType; icon: string; label: string }[] = [
+const DOC_TYPES: { k: AnyDocType; icon: string; label: string }[] = [
+  { k: "PO", icon: "📋", label: "구매발주서 (PO)" },
+  { k: "CIJ", icon: "🧾", label: "상업송장 (CI)" },
+  { k: "QT", icon: "💠", label: "견적서 (Quotation)" },
   { k: "PL", icon: "📦", label: "Packing List (PL)" },
-  { k: "CI", icon: "🧾", label: "Commercial Invoice" },
   { k: "EX", icon: "📤", label: "수출신고 서류" },
   { k: "INV", icon: "💰", label: "인보이스 (Invoice)" },
-  { k: "CT", icon: "✍", label: "계약서" },
 ];
 
 const DOC_META: Record<
@@ -103,7 +106,7 @@ const fmt = (n: number | string) =>
 export default function Docs() {
   const flash = useToast();
 
-  const [docType, setDocType] = useState<DocType>("PL");
+  const [docType, setDocType] = useState<AnyDocType>("PO");
   const [dfExporter, setDfExporter] = useState("LJ-BIO INC. (엘제이바이오)");
   const [dfImporter, setDfImporter] = useState("Bangkok MediTrade Co., Ltd.");
   const [dfCountry, setDfCountry] = useState("Thailand");
@@ -116,14 +119,14 @@ export default function Docs() {
   const [docCompany, setDocCompany] = useState("LJ-BIO INC. (엘제이바이오)");
   const [docAddress, setDocAddress] = useState("서울특별시 강남구 학동로2길 19, 2층 2741호");
   const [docRep, setDocRep] = useState("지경준");
-  const [docNos, setDocNos] = useState<Record<DocType, string>>({
+  const [docNos, setDocNos] = useState<Record<string, string>>({
     PL: "LJ-PL-2026-0714",
     CI: "LJ-CI-2026-0714",
     EX: "LJ-EX-2026-0714",
     INV: "LJ-INV-2026-0714",
     CT: "LJ-CT-2026-08",
   });
-  const [docNotes, setDocNotes] = useState<Record<DocType, string>>({
+  const [docNotes, setDocNotes] = useState<Record<string, string>>({
     PL: "총 포장 수량 / 원산지: 대한민국 (Republic of Korea). 본 패킹리스트는 통관용입니다.",
     CI: "결제조건: T/T 30% 선급, 잔금 선적 전 결제 / 인도조건: CIF. 은행: KEB Hana Bank · 계좌 123-910056-78901 · SWIFT: KOEXKRSE · 예금주: LJ-BIO INC.",
     EX: "세관 신고용 · 결제방법 T/T · 인도조건 CIF · 원산지 대한민국. 관세사 검토 후 전자신고 제출.",
@@ -160,7 +163,34 @@ export default function Docs() {
     });
   }
 
-  const dm = DOC_META[docType];
+  // ---- 새 무역 문서 3종(구매발주서·상업송장·견적서)은 전용 에디터로 ----
+  if (docType === "PO" || docType === "CIJ" || docType === "QT") {
+    return (
+      <div className="fade" style={{ maxWidth: 860, margin: "0 auto" }}>
+        <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {DOC_TYPES.map((d) => {
+            const on = docType === d.k;
+            return (
+              <button
+                key={d.k}
+                onClick={() => setDocType(d.k)}
+                style={{
+                  padding: "9px 15px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${on ? "#0C0F0D" : "rgba(12,15,13,0.14)"}`,
+                  background: on ? "#0C0F0D" : "#fff", color: on ? "#fff" : "#4A4C55",
+                }}
+              >
+                {d.icon} {d.label}
+              </button>
+            );
+          })}
+        </div>
+        <TradeDocs type={docType as TradeDocType} />
+      </div>
+    );
+  }
+
+  const dm = DOC_META[docType as DocType];
   const contract = dm.mode === "contract";
   const money = dm.mode === "money";
   const showFreight = dm.mode === "money";
