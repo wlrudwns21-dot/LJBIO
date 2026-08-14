@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fmtDT } from "@/lib/dates";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { priorityStyle, fieldStyle, noticeTagStyle } from "@/lib/theme";
 import { Card } from "../ui";
@@ -216,7 +217,7 @@ export default function Dashboard() {
               <div key={n.id} className="row-h" style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 8px", borderBottom: "1px solid rgba(12,15,13,0.06)", cursor: "pointer" }}>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6, background: c.bg, color: c.color, whiteSpace: "nowrap" }}>{n.tag}</span>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{n.title}</span>
-                <span style={{ fontSize: 12.5, color: "#84908A" }}>{(n as any).date || n.created_at}</span>
+                <span style={{ fontSize: 12.5, color: "#84908A" }}>{fmtDT((n as any).date || n.created_at)}</span>
               </div>
             );
           })}

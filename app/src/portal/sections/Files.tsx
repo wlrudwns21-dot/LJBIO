@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import { fmtD } from "@/lib/dates";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster } from "@/lib/access";
@@ -523,7 +524,7 @@ export default function Files() {
               </span>
               <span style={{ fontSize: 12.5, color: "#5A5C65" }}>{f.uploader}</span>
               <span style={{ fontSize: 12.5, color: "#84908A" }}>
-                {(f as { date?: string }).date || f.created_at}
+                {fmtD((f as { date?: string }).date || f.created_at)}
               </span>
               <span
                 style={{

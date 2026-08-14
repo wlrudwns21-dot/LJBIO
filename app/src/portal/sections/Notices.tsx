@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fmtDT } from "@/lib/dates";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { noticeTagStyle } from "@/lib/theme";
 import { Modal, useToast, Field, fieldStyle, PBtn } from "../ui";
@@ -83,7 +84,7 @@ export default function Notices() {
         title: editor.title,
         body: editor.body,
         author: editor.author || "경영지원 지경준",
-        created_at: TODAY,
+        created_at: new Date().toISOString(), // 실제 작성 시각
       };
       let created: Notice;
       if (isSupabaseConfigured) {
@@ -180,9 +181,9 @@ export default function Notices() {
                   {n.tag}
                 </span>
                 <span style={{ fontSize: 15.5, fontWeight: 600, flex: 1 }}>{n.title}</span>
-                <span style={{ fontSize: 12.5, color: "#84908A" }}>{n.created_at}</span>
+                <span style={{ fontSize: 12.5, color: "#84908A" }}>{fmtDT(n.created_at)}</span>
               </div>
-              <p style={{ marginTop: 10, fontSize: 14, lineHeight: 1.65, color: "#5A5C65" }}>
+              <p className="readable" style={{ marginTop: 10, fontSize: 15, lineHeight: 1.8, color: "#3f4450" }}>
                 {n.body}
               </p>
               <div

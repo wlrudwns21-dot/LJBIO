@@ -118,10 +118,14 @@
   .g-mail {
     grid-template-columns: 1fr !important;
     grid-template-rows: auto 1fr;
-    height: calc(100dvh - 172px) !important;
+    /* 모바일: 읽기 공간 최대 확보 */
+    height: calc(100dvh - 118px) !important;
+  }
+  .g-mail.mail-open {
+    height: calc(100dvh - 104px) !important;
   }
   .g-mail > div:first-child {
-    max-height: 46vh;
+    max-height: 38vh;
     border-right: none !important;
     border-bottom: 1px solid rgba(12, 15, 13, 0.08);
   }
@@ -194,6 +198,11 @@
   .adm-row {
     flex-wrap: wrap !important;
     row-gap: 8px !important;
+  }
+  /* 본문 읽기 영역: 모바일에서 더 크게 */
+  .readable {
+    font-size: 16.5px !important;
+    line-height: 1.85 !important;
   }
   /* iOS 사파리: 입력 포커스 시 자동 확대 방지(16px 미만이면 확대됨) */
   .app-main input,

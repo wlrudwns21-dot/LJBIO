@@ -404,7 +404,7 @@ export default function Schedule() {
                     value={editor.minutes}
                     onChange={(e) => setEditor({ ...editor, minutes: e.target.value })}
                     placeholder={"예)\n· 참석: 지경준, 최민수\n· 결정사항: 태국 초도물량 5,000ea 확정\n· 후속조치: 계약서 수정 후 재발송 (담당 최민수)"}
-                    style={{ ...fld, minHeight: 130, lineHeight: 1.6, resize: "vertical", display: "block" }}
+                    style={{ ...fld, minHeight: 150, fontSize: 15, lineHeight: 1.75, resize: "vertical", display: "block" }}
                   />
                   {(() => {
                     const ev = events.find((x) => x.id === editor.id);

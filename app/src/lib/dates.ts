@@ -1,0 +1,11 @@
+/** 날짜 표시 헬퍼 — DB timestamptz(ISO)든 날짜 문자열이든 깔끔하게. */
+export const fmtD = (s?: string | null) => (s ? String(s).slice(0, 10) : "");
+
+/** 작성 시간까지: "2026-08-14 09:30" */
+export const fmtDT = (s?: string | null) => {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return String(s).slice(0, 16);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};

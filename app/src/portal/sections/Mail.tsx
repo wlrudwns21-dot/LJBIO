@@ -801,10 +801,11 @@ export default function Mail() {
               </div>
               <div className="m-pad-lg" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 26px" }}>
                 <div
+                  className="readable"
                   style={{
-                    fontSize: 14,
-                    lineHeight: 1.8,
-                    color: "#2A2C33",
+                    fontSize: 15.5,
+                    lineHeight: 1.85,
+                    color: "#22242b",
                     whiteSpace: "pre-wrap",
                     wordBreak: "break-word",
                   }}

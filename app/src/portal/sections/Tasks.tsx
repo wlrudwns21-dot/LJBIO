@@ -5,6 +5,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { fmtDT } from "@/lib/dates";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { priorityStyle, fieldStyle } from "@/lib/theme";
@@ -798,7 +799,7 @@ function TaskDetail({
                           <div style={{ flex: 1, background: "#F4F7F5", borderRadius: 12, borderTopLeftRadius: 3, padding: "10px 13px" }}>
                             <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                               <span style={{ fontSize: 12.5, fontWeight: 600 }}>{cm.author}</span>
-                              <span style={{ fontSize: 11, color: "#9AA29C" }}>{cm.created_at}</span>
+                              <span style={{ fontSize: 11, color: "#9AA29C" }}>{fmtDT(cm.created_at)}</span>
                             </div>
                             <div style={{ marginTop: 3, fontSize: 13, lineHeight: 1.5, color: "#3A3C45" }}>{cm.body}</div>
                           </div>

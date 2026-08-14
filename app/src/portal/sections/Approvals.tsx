@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { fmtD } from "@/lib/dates";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster, DEFAULT_CEO } from "@/lib/access";
@@ -517,7 +518,7 @@ export default function Approvals() {
                       </span>
                       {a.drafter}
                     </span>
-                    <span>상신 {a.created_at}</span>
+                    <span>상신 {fmtD(a.created_at)}</span>
                     <span
                       className="mono"
                       style={{ color: "#0C0F0D", fontWeight: 600 }}
@@ -1467,7 +1468,7 @@ function ApprovalDetail({
               </div>
               <div style={cellHead}>상신일</div>
               <div style={{ ...cellVal, borderRight: "none" }}>
-                {a.created_at}
+                {fmtD(a.created_at)}
               </div>
             </div>
             <div
@@ -1503,10 +1504,11 @@ function ApprovalDetail({
               내용
             </div>
             <div
+              className="readable"
               style={{
-                fontSize: 14,
-                lineHeight: 1.75,
-                color: "#2A2C33",
+                fontSize: 15.5,
+                lineHeight: 1.85,
+                color: "#22242b",
                 whiteSpace: "pre-wrap",
               }}
             >
@@ -1639,7 +1641,7 @@ function ApprovalDetail({
                             {s.acted_at ? " · " + s.acted_at : ""}
                           </span>
                         </div>
-                        <div style={{ marginTop: 3, fontSize: 13, lineHeight: 1.55, color: "#3A3C45", whiteSpace: "pre-wrap" }}>
+                        <div className="readable" style={{ marginTop: 3, fontSize: 14, lineHeight: 1.7, color: "#3A3C45", whiteSpace: "pre-wrap" }}>
                           {s.comment}
                         </div>
                       </div>
