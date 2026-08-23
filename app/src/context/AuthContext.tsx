@@ -43,6 +43,7 @@ interface AuthState {
   signup: (input: SignupInput) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  changePassword: (newPassword: string) => Promise<{ error?: string }>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -113,6 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = async () => loadProfile(session?.user.id);
 
+  const changePassword: AuthState["changePassword"] = async (newPassword) => {
+    if (!isSupabaseConfigured) return { error: "Supabase가 설정되지 않았습니다." };
+    if ((newPassword || "").length < 6)
+      return { error: "비밀번호는 6자 이상이어야 합니다." };
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error: error.message };
+    return {};
+  };
+
   const status: AuthState["status"] = useMemo(() => {
     if (loading) return "loading";
     if (!session) return "out";
@@ -130,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signup,
     logout,
     refreshProfile,
+    changePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -6,6 +6,71 @@ import { roleLabel } from "@/lib/theme";
 import { isMaster } from "@/lib/access";
 import { SECTIONS, type SectionKey } from "./sections/registry";
 import { SectionNavContext } from "./nav";
+import { Modal, useToast } from "./ui";
+
+/* 로그인한 사용자가 스스로 비밀번호를 바꾸는 모달 (임시 비번 → 새 비번) */
+function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { changePassword } = useAuth();
+  const flash = useToast();
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (open) { setPw1(""); setPw2(""); setErr(""); }
+  }, [open]);
+
+  async function submit() {
+    setErr("");
+    if (pw1.length < 6) { setErr("새 비밀번호는 6자 이상이어야 합니다."); return; }
+    if (pw1 !== pw2) { setErr("두 비밀번호가 일치하지 않습니다."); return; }
+    setBusy(true);
+    const { error } = await changePassword(pw1);
+    setBusy(false);
+    if (error) { setErr("변경 실패: " + error); return; }
+    flash("비밀번호가 변경되었습니다");
+    onClose();
+  }
+
+  const fld: React.CSSProperties = {
+    marginTop: 5, width: "100%", padding: "11px 13px",
+    border: "1.5px solid rgba(12,15,13,0.14)", borderRadius: 9, fontSize: 16,
+  };
+  const lbl: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, color: "#4A4C55" };
+
+  return (
+    <Modal open={open} onClose={onClose} width={420}>
+      <h2 style={{ fontSize: 19, fontWeight: 700 }}>🔑 비밀번호 변경</h2>
+      <div style={{ fontSize: 12.5, color: "#84908A", marginTop: 4, lineHeight: 1.5 }}>
+        임시 비밀번호로 로그인하셨다면, 여기서 본인만 아는 새 비밀번호로 바꿔주세요.
+      </div>
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <label style={lbl}>새 비밀번호</label>
+          <input type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} placeholder="6자 이상" style={fld} autoFocus />
+        </div>
+        <div>
+          <label style={lbl}>새 비밀번호 확인</label>
+          <input
+            type="password" value={pw2} onChange={(e) => setPw2(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder="다시 입력" style={fld}
+          />
+        </div>
+        {err && <div style={{ fontSize: 12.5, color: "#C4553E", fontWeight: 600 }}>{err}</div>}
+      </div>
+      <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <button onClick={onClose} className="gbtn" style={{ padding: "11px 20px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 9, background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          취소
+        </button>
+        <button onClick={submit} disabled={busy} className="pbtn" style={{ padding: "11px 24px", border: "none", borderRadius: 9, background: busy ? "#9AA29C" : "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: busy ? "default" : "pointer" }}>
+          {busy ? "변경 중…" : "변경"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 type Badges = Partial<Record<string, number>>;
 
@@ -108,6 +173,7 @@ export default function PortalShell() {
   const { profile, logout } = useAuth();
   const [section, setSection] = useState<SectionKey>("dashboard");
   const [drawer, setDrawer] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const { badges, markSeen } = useNavBadges(
     profile ? { id: profile.id, name: profile.name } : null,
   );
@@ -250,11 +316,19 @@ export default function PortalShell() {
               {roleLabel(me.role)} · {me.dept}
             </div>
           </div>
+          <span
+            onClick={() => setPwOpen(true)}
+            title="비밀번호 변경"
+            style={{ cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 16, marginRight: 4 }}
+          >
+            🔑
+          </span>
           <span onClick={() => logout()} title="로그아웃" style={{ cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 17 }}>
             ⏻
           </span>
         </div>
       </aside>
+      <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
       <div className={"sb-overlay" + (drawer ? " open" : "")} onClick={() => setDrawer(false)} />
 
       {/* MAIN */}
