@@ -80,7 +80,6 @@ export function Modal({
   return createPortal(
     <div
       className="modalwrap"
-      onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,

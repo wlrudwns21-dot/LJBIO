@@ -493,7 +493,6 @@ export default function Partners() {
       {editor && (
         <ModalWrap
           className="modalwrap"
-          onClick={() => setEditor(null)}
           style={{
             position: "fixed",
             inset: 0,

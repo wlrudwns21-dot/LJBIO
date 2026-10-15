@@ -645,7 +645,6 @@ export default function Files() {
       {upload && (
         <ModalWrap
           className="modalwrap"
-          onClick={() => setUpload(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -910,7 +909,6 @@ export default function Files() {
       {secEdit && (
         <ModalWrap
           className="modalwrap"
-          onClick={() => setSecEdit(null)}
           style={{
             position: "fixed",
             inset: 0,

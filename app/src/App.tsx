@@ -4,6 +4,7 @@ import About from "./site/About";
 import Business from "./site/Business";
 import Global from "./site/Global";
 import Contact from "./site/Contact";
+import Gift from "./site/Gift";
 import PortalApp from "./portal/PortalApp";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
       <Route path="/business" element={<Business />} />
       <Route path="/global" element={<Global />} />
       <Route path="/contact" element={<Contact />} />
+      <Route path="/gift" element={<Gift />} />
       <Route path="/portal/*" element={<PortalApp />} />
       <Route path="*" element={<Home />} />
     </Routes>

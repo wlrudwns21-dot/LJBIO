@@ -19,6 +19,8 @@ import type {
   CalendarEvent,
   Profile,
   Inquiry,
+  GiftOrder,
+  Project,
 } from "@/types/database";
 
 export const demoMe = {
@@ -69,15 +71,20 @@ export const demoNotices: Notice[] = [
   { id: "5", tag: "인사", title: "2026년 여름 휴가 신청 안내", body: "7~8월 여름 휴가 신청을 받습니다. 근태·HR 메뉴에서 신청해 주시고, 팀별 업무 공백이 없도록 협의 바랍니다.", author: "경영지원 지경준", created_at: "2026-07-01" },
 ];
 
+export const demoProjects: Project[] = [
+  { id: "pr1", name: "중국 NMPA 인허가 2026", description: "의료기기·의약품 중국 시장 진출을 위한 NMPA 등록 프로젝트", color: "#2A6FDB", status: "active", created_by: "지경준", created_at: "2026-07-01T09:00:00" },
+  { id: "pr2", name: "태국 필러 수출", description: "태국 바이어 대상 필러 제품 수출 및 선적 관리", color: "#0E7B4E", status: "active", created_by: "지경준", created_at: "2026-07-03T09:00:00" },
+];
+
 export const demoTasks: TaskFull[] = [
-  { id: "1", title: "중국 첨단 의료기기 NMPA 인허가", country: "CN · 의료기기", field: "인허가", assignee: "박지원", priority: "긴급", due: "2026-07-22", status: "doing", created_at: "",
+  { id: "1", title: "중국 첨단 의료기기 NMPA 인허가", country: "CN · 의료기기", field: "인허가", assignee: "박지원", priority: "긴급", due: "2026-07-22", status: "doing", project_id: "pr1", created_at: "",
     stages: [
       { id: "1a", task_id: "1", name: "제품 기술문서 준비", status: "done", sort: 0, comments: [{ id: "c1", stage_id: "1a", author: "박지원", init: "박", avatar_bg: "#0E7B4E", body: "기술문서 및 시험성적서 번역본 첨부 완료했습니다.", created_at: "7/2 10:12" }] },
       { id: "1b", task_id: "1", name: "NMPA 사전 적합성 검토", status: "done", sort: 1, comments: [{ id: "c2", stage_id: "1b", author: "지경준", init: "지", avatar_bg: "#2A6FDB", body: "현지 대행사 검토 통과. 본심사 진행합시다.", created_at: "7/6 15:40" }] },
       { id: "1c", task_id: "1", name: "본심사 신청 및 대응", status: "doing", sort: 2, comments: [{ id: "c3", stage_id: "1c", author: "박지원", init: "박", avatar_bg: "#0E7B4E", body: "추가 자료 요청 대응 중 — 라벨 샘플 재제출 필요.", created_at: "7/9 09:22" }] },
       { id: "1d", task_id: "1", name: "등록증 발급", status: "todo", sort: 3, comments: [] },
     ] },
-  { id: "2", title: "태국 필러 제품 수출 선적 (5,000ea)", country: "TH · 필러", field: "물류", assignee: "정우성", priority: "높음", due: "2026-07-14", status: "review", created_at: "",
+  { id: "2", title: "태국 필러 제품 수출 선적 (5,000ea)", country: "TH · 필러", field: "물류", assignee: "정우성", priority: "높음", due: "2026-07-14", status: "review", project_id: "pr2", created_at: "",
     stages: [
       { id: "2a", task_id: "2", name: "발주 확인 및 재고 배정", status: "done", sort: 0, comments: [{ id: "c4", stage_id: "2a", author: "정우성", init: "정", avatar_bg: "#C6803A", body: "5,000ea 재고 확보 완료.", created_at: "7/5 11:00" }] },
       { id: "2b", task_id: "2", name: "PL / CI 서류 작성", status: "doing", sort: 1, comments: [{ id: "c5", stage_id: "2b", author: "최민수", init: "최", avatar_bg: "#7A4DD1", body: "인보이스 단가 CIF 기준으로 통일 부탁해요.", created_at: "7/9 14:05" }] },
@@ -190,6 +197,12 @@ export const demoEvents: (CalendarEvent & { day: string; mon: string })[] = [
   { id: "4", title: "일본 출장 (최민수 팀장)", type: "출장", event_date: "2026-07-18", day: "18", mon: "JUL", time: "3일간", created_at: "" },
   { id: "5", title: "NMPA 본심사 자료 제출", type: "제출", event_date: "2026-07-22", day: "22", mon: "JUL", time: "오후 5:00", created_at: "" },
   { id: "6", title: "월간 영업 전략 회의", type: "회의", event_date: "2026-07-25", day: "25", mon: "JUL", time: "오전 10:00", created_at: "" },
+];
+
+export const demoGiftOrders: GiftOrder[] = [
+  { id: "1", product: "스마트 선물set 6호", price: 66000, quantity: 2, recipient_name: "김영수", recipient_phone: "010-1234-5678", recipient_address: "서울특별시 강남구 테헤란로 123", address_detail: "10층 1001호", delivery_date: "2026-09-25", sender_name: "지경준", sender_phone: "010-1111-2222", memo: "부재 시 경비실에 맡겨주세요.", status: "new", created_at: "2026-09-01T10:15:00" },
+  { id: "2", product: "사과배 혼합set", price: 104500, quantity: 1, recipient_name: "박미경", recipient_phone: "010-8765-4321", recipient_address: "부산광역시 해운대구 마린시티2로 33", address_detail: "202동 1503호", delivery_date: "2026-09-24", sender_name: "이일형", sender_phone: "010-3333-4444", memo: "", status: "confirmed", created_at: "2026-08-31T14:40:00" },
+  { id: "3", product: "실속형 사과", price: 23000, quantity: 3, recipient_name: "최정훈", recipient_phone: "010-5555-6666", recipient_address: "대전광역시 유성구 대학로 291", address_detail: "", delivery_date: "2026-09-26", sender_name: "", sender_phone: "", memo: "오전 배송 희망", status: "shipped", created_at: "2026-08-30T09:05:00" },
 ];
 
 export const demoInquiries: Inquiry[] = [

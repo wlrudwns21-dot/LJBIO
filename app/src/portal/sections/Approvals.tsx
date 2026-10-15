@@ -588,7 +588,6 @@ export default function Approvals() {
       {editor && (
         <ModalWrap
           className="modalwrap"
-          onClick={() => setEditor(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -1081,7 +1080,6 @@ function ApprovalDetail({
   return (
     <ModalWrap
       className="modalwrap"
-      onClick={onClose}
       style={{
         position: "fixed",
         inset: 0,

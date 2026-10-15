@@ -70,9 +70,11 @@ const selectStyle: CSSProperties = {
 };
 const labelStyle: CSSProperties = { fontSize: 12.5, color: "#4A4C55", fontWeight: 600 };
 
-export default function Tasks() {
+export default function Tasks({ projectId }: { projectId?: string | "none" | null } = {}) {
   const toast = useToast();
   const { profile } = useAuth();
+  // 이 프로젝트에 저장할 project_id ("none"/미지정 → null)
+  const pid = projectId && projectId !== "none" ? projectId : null;
   // 댓글 작성자 = 로그인한 사용자 (데모 모드에서만 지경준)
   const meName = profile?.name ?? "지경준";
   const meInit = profile?.init ?? meName.charAt(0);
@@ -112,7 +114,16 @@ export default function Tasks() {
   }
 
   const sel = tasks.find((t) => t.id === selectedTaskId) || null;
-  const filtered = tasks.filter((t) => taskFilter === "전체" || t.field === taskFilter);
+  // 프로젝트 범위: projectId 미지정=전체 · "none"=미분류 · 그 외=해당 프로젝트
+  const matchProject = (t: TaskFull) =>
+    projectId === undefined
+      ? true
+      : projectId === "none"
+        ? !t.project_id
+        : t.project_id === projectId;
+  const filtered = tasks.filter(
+    (t) => matchProject(t) && (taskFilter === "전체" || t.field === taskFilter),
+  );
 
   /* ---------------------------------------------------------- mutations */
   function cycleStage(taskId: string, idx: number) {
@@ -317,6 +328,7 @@ export default function Tasks() {
             assignee: te.assignee,
             priority: te.priority,
             due: te.due,
+            project_id: pid,
           })
           .select()
           .single();
@@ -345,6 +357,7 @@ export default function Tasks() {
       priority: te.priority as TaskFull["priority"],
       due: te.due,
       status: "todo",
+      project_id: pid,
       created_at: "",
       stages: stageNames.map((name, i) => ({
         id: genId(),
@@ -738,7 +751,7 @@ function TaskDetail({
                     <div style={{ width: 2, flex: 1, minHeight: 24, background: done ? "#0E7B4E" : "rgba(12,15,13,0.12)" }} />
                   )}
                 </div>
-                <div style={{ flex: 1, paddingBottom: 22 }}>
+                <div style={{ flex: 1, minWidth: 0, paddingBottom: 22 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <input
                       value={s.name}
@@ -796,7 +809,7 @@ function TaskDetail({
                           <div style={{ width: 28, height: 28, borderRadius: "50%", background: cm.avatar_bg, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700 }}>
                             {cm.init}
                           </div>
-                          <div style={{ flex: 1, background: "#F4F7F5", borderRadius: 12, borderTopLeftRadius: 3, padding: "10px 13px" }}>
+                          <div style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere", background: "#F4F7F5", borderRadius: 12, borderTopLeftRadius: 3, padding: "10px 13px" }}>
                             <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                               <span style={{ fontSize: 12.5, fontWeight: 600 }}>{cm.author}</span>
                               <span style={{ fontSize: 11, color: "#9AA29C" }}>{fmtDT(cm.created_at)}</span>
@@ -818,7 +831,7 @@ function TaskDetail({
                         }
                       }}
                       placeholder="코멘트 남기기…"
-                      style={{ flex: 1, padding: "9px 13px", border: "1.5px solid rgba(12,15,13,0.12)", borderRadius: 20, fontSize: 13 }}
+                      style={{ flex: 1, minWidth: 0, padding: "9px 13px", border: "1.5px solid rgba(12,15,13,0.12)", borderRadius: 20, fontSize: 13 }}
                     />
                     <button
                       onClick={() => onSend(idx)}

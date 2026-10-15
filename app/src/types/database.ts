@@ -53,6 +53,8 @@ export interface Task {
   due: string | null;
   /** 칸반 상태(대기/진행중/검토/완료). 담당자가 직접 지정합니다. */
   status: TaskStatus;
+  /** 소속 프로젝트 (없으면 미분류) */
+  project_id?: string | null;
   created_at: string;
 }
 
@@ -220,6 +222,8 @@ export interface FileRow {
   grade?: number;
   /** 기밀 1급 개별 열람 허용자(이메일 목록) */
   allowed?: string[];
+  /** 소속 프로젝트 (없으면 전사 공용) */
+  project_id?: string | null;
   created_at: string;
 }
 
@@ -245,6 +249,33 @@ export interface Inquiry {
   type: string;
   message: string;
   status: "new" | "read" | "replied" | "archived";
+  created_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  status: "active" | "done" | "archived";
+  created_by: string;
+  created_at: string;
+}
+
+export interface GiftOrder {
+  id: string;
+  product: string;
+  price: number;
+  quantity: number;
+  recipient_name: string;
+  recipient_phone: string;
+  recipient_address: string;
+  address_detail: string;
+  delivery_date: string | null;
+  sender_name: string;
+  sender_phone: string;
+  memo: string;
+  status: "new" | "confirmed" | "shipped" | "done" | "canceled";
   created_at: string;
 }
 

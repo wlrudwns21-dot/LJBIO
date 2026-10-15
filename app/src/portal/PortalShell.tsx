@@ -74,7 +74,7 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
 
 type Badges = Partial<Record<string, number>>;
 
-const DEMO_BADGES: Badges = { chat: 5, mail: 2, approvals: 3, hr: 2, admin: 3, inquiries: 1 };
+const DEMO_BADGES: Badges = { chat: 5, mail: 2, approvals: 3, hr: 2, admin: 3, inquiries: 1, gifts: 1 };
 
 /** 계정별 새 항목 뱃지 — 각 섹션의 '마지막 확인 시각(section_seen)' 이후
  *  등록된 건수를 세고, 그 계정이 메뉴를 열면 확인 시각을 갱신해 뱃지를 지웁니다.
@@ -87,6 +87,7 @@ const SEEN_DEFS: {
 }[] = [
   { key: "notices", table: "notices" },
   { key: "inquiries", table: "inquiries" },
+  { key: "gifts", table: "gift_orders" },
   { key: "tasks", table: "tasks" },
   { key: "schedule", table: "calendar_events" },
   { key: "chat", table: "messages", exclude: (q, me) => q.neq("sender_id", me.id) },
