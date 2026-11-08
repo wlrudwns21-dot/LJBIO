@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 import Dashboard from "./Dashboard";
 import Notices from "./Notices";
 import Inquiries from "./Inquiries";
-import Gifts from "./Gifts";
 import Projects from "./Projects";
 import Schedule from "./Schedule";
 import Chat from "./Chat";
@@ -20,7 +19,6 @@ export type SectionKey =
   | "dashboard"
   | "notices"
   | "inquiries"
-  | "gifts"
   | "tasks"
   | "schedule"
   | "chat"
@@ -41,7 +39,7 @@ export interface SectionDef {
   title: string;
   sub: string;
   /** which nav-badge counter to display, if any */
-  badge?: "chat" | "mail" | "approvals" | "hr" | "admin" | "inquiries" | "gifts";
+  badge?: "chat" | "mail" | "approvals" | "hr" | "admin" | "inquiries";
   Component: ComponentType;
 }
 
@@ -50,7 +48,6 @@ export const SECTIONS: SectionDef[] = [
   { key: "dashboard", icon: "▦", nav: "대시보드", title: "대시보드", sub: "오늘의 업무 현황을 한눈에", Component: Dashboard },
   { key: "notices", icon: "📢", nav: "공지사항", title: "공지사항", sub: "전사 주요 소식 및 규정 안내", Component: Notices },
   { key: "inquiries", icon: "📬", nav: "고객 문의", title: "고객 문의", sub: "홈페이지 문의하기 접수 · 응대", badge: "inquiries", Component: Inquiries },
-  { key: "gifts", icon: "🎁", nav: "추석 선물", title: "추석 선물 배송 신청", sub: "홈페이지 선물 신청 접수 · 배송 관리", badge: "gifts", Component: Gifts },
   { key: "tasks", icon: "🗂", nav: "프로젝트", title: "프로젝트", sub: "프로젝트별 업무 과제와 문서 관리", Component: Projects },
   { key: "schedule", icon: "📅", nav: "일정 관리", title: "일정 관리", sub: "팀 일정과 마감 캘린더", Component: Schedule },
   { key: "chat", icon: "💬", nav: "메시지", title: "메시지", sub: "전사 단톡방과 1:1 대화", badge: "chat", Component: Chat },

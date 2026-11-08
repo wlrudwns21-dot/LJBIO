@@ -19,7 +19,6 @@ import type {
   CalendarEvent,
   Profile,
   Inquiry,
-  GiftOrder,
   Project,
 } from "@/types/database";
 
@@ -197,12 +196,6 @@ export const demoEvents: (CalendarEvent & { day: string; mon: string })[] = [
   { id: "4", title: "일본 출장 (최민수 팀장)", type: "출장", event_date: "2026-07-18", day: "18", mon: "JUL", time: "3일간", created_at: "" },
   { id: "5", title: "NMPA 본심사 자료 제출", type: "제출", event_date: "2026-07-22", day: "22", mon: "JUL", time: "오후 5:00", created_at: "" },
   { id: "6", title: "월간 영업 전략 회의", type: "회의", event_date: "2026-07-25", day: "25", mon: "JUL", time: "오전 10:00", created_at: "" },
-];
-
-export const demoGiftOrders: GiftOrder[] = [
-  { id: "1", product: "스마트 선물set 6호", price: 66000, quantity: 2, recipient_name: "김영수", recipient_phone: "010-1234-5678", recipient_address: "서울특별시 강남구 테헤란로 123", address_detail: "10층 1001호", delivery_date: "2026-09-25", sender_name: "지경준", sender_phone: "010-1111-2222", memo: "부재 시 경비실에 맡겨주세요.", status: "new", created_at: "2026-09-01T10:15:00" },
-  { id: "2", product: "사과배 혼합set", price: 104500, quantity: 1, recipient_name: "박미경", recipient_phone: "010-8765-4321", recipient_address: "부산광역시 해운대구 마린시티2로 33", address_detail: "202동 1503호", delivery_date: "2026-09-24", sender_name: "이일형", sender_phone: "010-3333-4444", memo: "", status: "confirmed", created_at: "2026-08-31T14:40:00" },
-  { id: "3", product: "실속형 사과", price: 23000, quantity: 3, recipient_name: "최정훈", recipient_phone: "010-5555-6666", recipient_address: "대전광역시 유성구 대학로 291", address_detail: "", delivery_date: "2026-09-26", sender_name: "", sender_phone: "", memo: "오전 배송 희망", status: "shipped", created_at: "2026-08-30T09:05:00" },
 ];
 
 export const demoInquiries: Inquiry[] = [
