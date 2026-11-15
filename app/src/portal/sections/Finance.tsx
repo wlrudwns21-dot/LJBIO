@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { fmtKRW } from "@/lib/theme";
 import { fmtD } from "@/lib/dates";
 import { useAuth } from "@/context/AuthContext";
+import { isMaster } from "@/lib/access";
 import { storeUpload, storedValue, attFrom, downloadAttachment } from "@/lib/storage";
 import { Modal, useToast } from "../ui";
 import { demoSegments, demoFinTxns, demoFinAccounts, demoPartners } from "../data/demo";
@@ -14,7 +15,7 @@ const genId = () =>
 const ACCT_TYPES: AcctType[] = ["수익", "비용", "자산", "부채", "자본", "분배"];
 const ACCOUNTS: Record<AcctType, string[]> = {
   수익: ["상품매출", "용역매출", "수수료수익", "이자수익", "기타수익"],
-  비용: ["매출원가", "급여", "임차료", "지급수수료", "광고선전비", "여비교통비", "통신비", "소모품비", "복리후생비", "세금과공과", "감가상각비", "이자비용", "기타비용"],
+  비용: ["매출원가", "급여", "성과급", "상여금", "임차료", "지급수수료", "광고선전비", "여비교통비", "통신비", "소모품비", "복리후생비", "세금과공과", "감가상각비", "이자비용", "기타비용"],
   자산: ["현금및현금성자산", "보통예금", "매출채권", "미수금", "재고자산", "선급금", "비품", "임차보증금"],
   부채: ["매입채무", "미지급금", "예수금", "단기차입금", "장기차입금"],
   자본: ["자본금", "이익잉여금", "자본잉여금"],
@@ -50,6 +51,10 @@ type Editor = {
   requester: string;
 };
 
+/** 성과급·상여금처럼 비용/이익처분 양쪽으로 처리 가능한 계정 */
+const DUAL_ACCOUNTS = ["성과급", "상여금"];
+const pickBtn = (on: boolean): CSSProperties => ({ flex: 1, padding: "10px 10px", border: `1.5px solid ${on ? "#0E7B4E" : "rgba(12,15,13,0.14)"}`, borderRadius: 9, background: on ? "#0E7B4E" : "#fff", color: on ? "#fff" : "#5A5C65", fontSize: 12.5, fontWeight: 600, cursor: "pointer", lineHeight: 1.35, textAlign: "center" });
+
 const lbl: CSSProperties = { fontSize: 12.5, color: "#4A4C55", fontWeight: 600 };
 const fld: CSSProperties = { marginTop: 6, width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1.5px solid rgba(12,15,13,0.12)", borderRadius: 9, fontSize: 14 };
 
@@ -58,6 +63,9 @@ export default function Finance() {
   const toast = useToast();
   const role = profile?.role ?? "admin";
   const canAccess = role === "admin" || role === "manager";
+  /** 거래내역·지출결의·재무제표 등 상세 재무는 마스터(지경준) + 대표자(is_ceo)만 열람.
+   *  데모(Supabase 미설정)는 마스터 계정으로 로그인한 것으로 간주. */
+  const canFinDetail = !isSupabaseConfigured || isMaster(profile) || !!profile?.is_ceo;
   const meName = profile?.name ?? "지경준";
 
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
@@ -281,16 +289,16 @@ export default function Finance() {
       <div className="g-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
         <div style={{ display: "inline-flex", background: "rgba(12,15,13,0.05)", borderRadius: 10, padding: 3, flexWrap: "wrap" }}>
           <Seg on={tab === "overview"} onClick={() => setTab("overview")} label="부문 현황" />
-          <Seg on={tab === "ledger"} onClick={() => setTab("ledger")} label="거래 내역" />
-          <Seg on={tab === "voucher"} onClick={() => setTab("voucher")} label="지출결의" />
-          <Seg on={tab === "statements"} onClick={() => setTab("statements")} label="재무제표" />
+          {canFinDetail && <Seg on={tab === "ledger"} onClick={() => setTab("ledger")} label="거래 내역" />}
+          {canFinDetail && <Seg on={tab === "voucher"} onClick={() => setTab("voucher")} label="지출결의" />}
+          {canFinDetail && <Seg on={tab === "statements"} onClick={() => setTab("statements")} label="재무제표" />}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <select value={year} onChange={(e) => setYear(e.target.value)} style={selStyle}>
             {years.map((y) => <option key={y} value={y}>{y === "전체" ? "전체 기간" : y + "년"}</option>)}
           </select>
-          <button onClick={() => setAcctMgr(true)} className="gbtn" style={{ padding: "10px 14px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 10, background: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>계정 관리</button>
-          <button onClick={() => newTxn()} className="pbtn" style={{ padding: "10px 16px", border: "none", borderRadius: 10, background: "#0C0F0D", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ 거래 등록</button>
+          {canFinDetail && <button onClick={() => setAcctMgr(true)} className="gbtn" style={{ padding: "10px 14px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 10, background: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>계정 관리</button>}
+          {canFinDetail && <button onClick={() => newTxn()} className="pbtn" style={{ padding: "10px 16px", border: "none", borderRadius: 10, background: "#0C0F0D", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ 거래 등록</button>}
         </div>
       </div>
 
@@ -323,7 +331,7 @@ export default function Finance() {
                     <span>비용 <b style={{ color: "#D14343" }}>{fmtKRW(exp)}</b></span>
                     <span>순이익 <b style={{ color: net >= 0 ? "#0E7B4E" : "#D14343" }}>{fmtKRW(net)}</b></span>
                     <span>거래 <b style={{ color: "#0C0F0D" }}>{cnt}건</b></span>
-                    <button onClick={() => { setTab("ledger"); setSegFilter(sg.id); }} style={{ marginLeft: "auto", border: "none", background: "transparent", color: "#2A6FDB", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>내역 보기 →</button>
+                    {canFinDetail && <button onClick={() => { setTab("ledger"); setSegFilter(sg.id); }} style={{ marginLeft: "auto", border: "none", background: "transparent", color: "#2A6FDB", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>내역 보기 →</button>}
                   </div>
                 </div>
               ))}
@@ -354,7 +362,7 @@ export default function Finance() {
       )}
 
       {/* ===================== 거래 내역 ===================== */}
-      {tab === "ledger" && (
+      {tab === "ledger" && canFinDetail && (
         <div>
           <div className="g-toolbar" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
             <select value={segFilter} onChange={(e) => setSegFilter(e.target.value)} style={selStyle}>
@@ -405,7 +413,7 @@ export default function Finance() {
       )}
 
       {/* ===================== 지출결의 ===================== */}
-      {tab === "voucher" && (
+      {tab === "voucher" && canFinDetail && (
         <div>
           <div className="g-toolbar" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
             <div style={{ fontSize: 13.5, color: "#5A5C65" }}>지출 전 결의서를 등록하고 <b>승인 → 지급완료</b> 시 재무제표에 반영됩니다.</div>
@@ -446,7 +454,7 @@ export default function Finance() {
       )}
 
       {/* ===================== 재무제표 ===================== */}
-      {tab === "statements" && (
+      {tab === "statements" && canFinDetail && (
         <div className="g-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
           <Card title="손익계산서" sub={year === "전체" ? "전체 기간" : year + "년"}>
             <StmtSection title="매출 · 수익" rows={byAccount("수익")} total={totalRev} color="#0E7B4E" />
@@ -564,6 +572,16 @@ export default function Finance() {
                   </select>
                 </div>
               </div>
+              {DUAL_ACCOUNTS.includes(editor.account.trim()) && (
+                <div style={{ background: "#F7FAF8", border: "1px solid rgba(12,15,13,0.08)", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#4A4C55", marginBottom: 8 }}>처리 방식 — {editor.account.trim()}을(를) 어떻게 반영할까요?</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" onClick={() => setEditor({ ...editor, acct_type: "비용" })} style={pickBtn(editor.acct_type === "비용")}>비용(판관비)<br /><span style={{ fontSize: 11, opacity: 0.85 }}>순이익 차감</span></button>
+                    <button type="button" onClick={() => setEditor({ ...editor, acct_type: "분배" })} style={pickBtn(editor.acct_type === "분배")}>이익 처분<br /><span style={{ fontSize: 11, opacity: 0.85 }}>순이익 영향 없음</span></button>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#84908A", marginTop: 8, lineHeight: 1.5 }}>매월 지급하는 급여성 상여는 <b>비용</b>, 결산 후 이익을 나눠주는 성과급은 <b>이익 처분</b>으로 선택하세요.</div>
+                </div>
+              )}
               <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div><label style={lbl}>거래처 <span style={{ color: "#84908A", fontWeight: 500 }}>(거래처 관리에서 선택)</span></label>
                   <input list="partner-list" value={editor.partner} onChange={(e) => setEditor({ ...editor, partner: e.target.value })} placeholder="거래처 선택 또는 입력" style={fld} />
