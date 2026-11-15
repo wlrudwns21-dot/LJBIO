@@ -5,19 +5,20 @@ import { fmtD } from "@/lib/dates";
 import { useAuth } from "@/context/AuthContext";
 import { storeUpload, storedValue, attFrom, downloadAttachment } from "@/lib/storage";
 import { Modal, useToast } from "../ui";
-import { demoSegments, demoFinTxns } from "../data/demo";
-import type { Segment, FinTxn, AcctType } from "@/types/database";
+import { demoSegments, demoFinTxns, demoFinAccounts, demoPartners } from "../data/demo";
+import type { Segment, FinTxn, FinAccount, AcctType } from "@/types/database";
 
 const genId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
 
-const ACCT_TYPES: AcctType[] = ["수익", "비용", "자산", "부채", "자본"];
+const ACCT_TYPES: AcctType[] = ["수익", "비용", "자산", "부채", "자본", "분배"];
 const ACCOUNTS: Record<AcctType, string[]> = {
   수익: ["상품매출", "용역매출", "수수료수익", "이자수익", "기타수익"],
   비용: ["매출원가", "급여", "임차료", "지급수수료", "광고선전비", "여비교통비", "통신비", "소모품비", "복리후생비", "세금과공과", "감가상각비", "이자비용", "기타비용"],
   자산: ["현금및현금성자산", "보통예금", "매출채권", "미수금", "재고자산", "선급금", "비품", "임차보증금"],
   부채: ["매입채무", "미지급금", "예수금", "단기차입금", "장기차입금"],
   자본: ["자본금", "이익잉여금", "자본잉여금"],
+  분배: ["이익분배", "배당금", "성과급", "상여금", "사내유보", "기타분배"],
 };
 const TYPE_COLOR: Record<AcctType, { bg: string; color: string }> = {
   수익: { bg: "#E9F2EC", color: "#0E7B4E" },
@@ -25,6 +26,7 @@ const TYPE_COLOR: Record<AcctType, { bg: string; color: string }> = {
   자산: { bg: "#E0EDFB", color: "#2A6FDB" },
   부채: { bg: "#FFF2DE", color: "#B77A16" },
   자본: { bg: "#F3EDFB", color: "#7A4DD1" },
+  분배: { bg: "#E6F6F4", color: "#0C9488" },
 };
 
 const fmtWon = (n: number) => (Number(n) || 0).toLocaleString("ko-KR") + "원";
@@ -40,8 +42,12 @@ type Editor = {
   amount: string;
   memo: string;
   file: File | null;
+  saveName: string;
   attachment: string | null;
   attachment_name: string;
+  voucher: boolean;
+  status: string;
+  requester: string;
 };
 
 const lbl: CSSProperties = { fontSize: 12.5, color: "#4A4C55", fontWeight: 600 };
@@ -56,8 +62,12 @@ export default function Finance() {
 
   const [segments, setSegments] = useState<Segment[]>(demoSegments);
   const [txns, setTxns] = useState<FinTxn[]>(isSupabaseConfigured ? [] : demoFinTxns);
+  const [accounts, setAccounts] = useState<FinAccount[]>(isSupabaseConfigured ? [] : demoFinAccounts);
+  const [acctMgr, setAcctMgr] = useState(false);
+  const [newAcct, setNewAcct] = useState<{ acct_type: AcctType; name: string; seg_id: string | null }>({ acct_type: "비용", name: "", seg_id: null });
+  const [partnerNames, setPartnerNames] = useState<string[]>(isSupabaseConfigured ? [] : demoPartners.map((p) => p.name));
   const [loading, setLoading] = useState(isSupabaseConfigured);
-  const [tab, setTab] = useState<"overview" | "ledger" | "statements">("overview");
+  const [tab, setTab] = useState<"overview" | "ledger" | "voucher" | "statements">("overview");
   const [editor, setEditor] = useState<Editor | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -74,6 +84,10 @@ export default function Finance() {
       if (sg) setSegments(sg as Segment[]);
       const { data: tx } = await supabase.from("fin_transactions").select("*").order("tx_date", { ascending: false });
       if (tx) setTxns(tx as FinTxn[]);
+      const { data: ac } = await supabase.from("fin_accounts").select("*").order("sort");
+      if (ac) setAccounts(ac as FinAccount[]);
+      const { data: pt } = await supabase.from("partners").select("name").order("name");
+      if (pt) setPartnerNames((pt as { name: string }[]).map((x) => x.name));
     })().catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -94,6 +108,29 @@ export default function Finance() {
     if (isSupabaseConfigured) { try { await fn(); } catch { /* ignore */ } }
   }
 
+  // 계정과목 옵션 = 사용자 등록 계정(해당 부문/공통) + 기본 프리셋
+  const acctOptions = (type: AcctType, seg: string | null) => {
+    const custom = accounts.filter((a) => a.acct_type === type && (!a.seg_id || a.seg_id === seg)).map((a) => a.name);
+    return Array.from(new Set([...custom, ...ACCOUNTS[type]]));
+  };
+
+  async function addAccount() {
+    if (!newAcct.name.trim()) { toast("계정과목명을 입력하세요"); return; }
+    const base = { acct_type: newAcct.acct_type, name: newAcct.name.trim(), seg_id: newAcct.seg_id, sort: accounts.length };
+    let saved: FinAccount = { id: genId(), created_at: "", ...base };
+    if (isSupabaseConfigured) {
+      try { const { data } = await supabase.from("fin_accounts").insert(base).select().single(); if (data) saved = data as FinAccount; } catch { /* local */ }
+    }
+    setAccounts((prev) => [...prev, saved]);
+    setNewAcct({ ...newAcct, name: "" });
+    toast("계정과목을 추가했습니다");
+  }
+  function removeAccount(a: FinAccount) {
+    setAccounts((prev) => prev.filter((x) => x.id !== a.id));
+    void persist(() => supabase.from("fin_accounts").delete().eq("id", a.id));
+    toast("계정과목을 삭제했습니다");
+  }
+
   /* --------------------------------------------------- 거래 추가/편집/삭제 */
   function newTxn(preset?: Partial<Editor>) {
     const today = new Date();
@@ -108,17 +145,30 @@ export default function Finance() {
       amount: "",
       memo: "",
       file: null,
+      saveName: "",
       attachment: null,
       attachment_name: "",
+      voucher: false,
+      status: "",
+      requester: meName,
       ...preset,
     });
+  }
+  function newVoucher() {
+    newTxn({ voucher: true, acct_type: "비용", account: ACCOUNTS["비용"][0], status: "대기" });
   }
   function editTxn(t: FinTxn) {
     setEditor({
       id: t.id, tx_date: (t.tx_date || "").slice(0, 10), seg_id: t.seg_id, acct_type: t.acct_type,
       account: t.account, partner: t.partner, amount: String(t.amount || ""), memo: t.memo,
-      file: null, attachment: t.attachment, attachment_name: t.attachment_name,
+      file: null, saveName: t.attachment_name || "", attachment: t.attachment, attachment_name: t.attachment_name,
+      voucher: !!t.is_voucher, status: t.status || "", requester: t.requester || "",
     });
+  }
+  function setVoucherStatus(t: FinTxn, status: string, msg: string) {
+    setTxns((prev) => prev.map((x) => (x.id === t.id ? { ...x, status } : x)));
+    toast(msg);
+    void persist(() => supabase.from("fin_transactions").update({ status }).eq("id", t.id));
   }
   function deleteTxn(t: FinTxn) {
     if (!window.confirm(`'${t.account} · ${fmtWon(t.amount)}' 거래를 삭제할까요?`)) return;
@@ -137,15 +187,24 @@ export default function Finance() {
     let attachment = e.attachment;
     let attachment_name = e.attachment_name;
     if (e.file) {
+      const saveName = (e.saveName.trim() || e.file.name);
       try {
         const att = await storeUpload(e.file, "finance");
         attachment = storedValue(att);
-        attachment_name = e.file.name;
+        attachment_name = saveName;
+        // 파일 관리에도 동일하게 보이도록 files 테이블에 등록
+        const ext = (/\.([a-z0-9]+)$/i.exec(e.file.name)?.[1] || "FILE").toUpperCase();
+        const size = e.file.size < 1024 * 1024 ? `${Math.round(e.file.size / 1024)} KB` : `${(e.file.size / 1048576).toFixed(1)} MB`;
+        await persist(() => supabase.from("files").insert({
+          name: saveName, ext, category: "재무", seg_id: e.seg_id, size,
+          uploader: meName, storage_path: attachment, grade: 3, tag: "재무/" + e.account.trim(),
+        }));
       } catch { /* keep going without file */ }
     }
     const row = {
       tx_date: e.tx_date, seg_id: e.seg_id, acct_type: e.acct_type, account: e.account.trim(),
       partner: e.partner.trim(), amount, memo: e.memo.trim(), attachment, attachment_name,
+      is_voucher: e.voucher, status: e.voucher ? (e.status || "대기") : "", requester: e.voucher ? e.requester : "",
     };
     if (e.id) {
       setTxns((prev) => prev.map((x) => (x.id === e.id ? { ...x, ...row } : x)));
@@ -166,35 +225,44 @@ export default function Finance() {
     setEditor(null);
   }
 
-  /* --------------------------------------------------- 집계 */
-  const sumBy = (pred: (t: FinTxn) => boolean) => periodTxns.filter(pred).reduce((a, t) => a + (t.amount || 0), 0);
+  /* --------------------------------------------------- 집계 (장부 = 일반거래 + 지급완료된 지출결의) */
+  const bookTxns = useMemo(() => periodTxns.filter((t) => !t.is_voucher || t.status === "지급완료"), [periodTxns]);
+  const sumBy = (pred: (t: FinTxn) => boolean) => bookTxns.filter(pred).reduce((a, t) => a + (t.amount || 0), 0);
   const totalRev = sumBy((t) => t.acct_type === "수익");
   const totalExp = sumBy((t) => t.acct_type === "비용");
   const netProfit = totalRev - totalExp;
   const totalAsset = sumBy((t) => t.acct_type === "자산");
   const totalLiab = sumBy((t) => t.acct_type === "부채");
   const totalEquity = sumBy((t) => t.acct_type === "자본");
+  const totalDist = sumBy((t) => t.acct_type === "분배");
+  const undistributed = netProfit - totalDist;
+  const distBySeg = useMemo(() => segments.map((sg) => ({ sg, amt: bookTxns.filter((t) => t.seg_id === sg.id && t.acct_type === "분배").reduce((a, t) => a + t.amount, 0) })).filter((x) => x.amt > 0), [segments, bookTxns]);
 
   const segStats = useMemo(() => {
     return segments.map((sg) => {
-      const rev = periodTxns.filter((t) => t.seg_id === sg.id && t.acct_type === "수익").reduce((a, t) => a + t.amount, 0);
-      const exp = periodTxns.filter((t) => t.seg_id === sg.id && t.acct_type === "비용").reduce((a, t) => a + t.amount, 0);
-      const cnt = periodTxns.filter((t) => t.seg_id === sg.id).length;
+      const rev = bookTxns.filter((t) => t.seg_id === sg.id && t.acct_type === "수익").reduce((a, t) => a + t.amount, 0);
+      const exp = bookTxns.filter((t) => t.seg_id === sg.id && t.acct_type === "비용").reduce((a, t) => a + t.amount, 0);
+      const cnt = bookTxns.filter((t) => t.seg_id === sg.id).length;
       return { sg, rev, exp, net: rev - exp, cnt };
     });
-  }, [segments, periodTxns]);
+  }, [segments, bookTxns]);
   const segRevMax = Math.max(1, ...segStats.map((s) => s.rev));
 
   const byAccount = (type: AcctType): [string, number][] => {
     const m = new Map<string, number>();
-    periodTxns.filter((t) => t.acct_type === type).forEach((t) => {
+    bookTxns.filter((t) => t.acct_type === type).forEach((t) => {
       const k = t.account || "(미지정)";
       m.set(k, (m.get(k) || 0) + t.amount);
     });
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   };
 
-  const shownLedger = txns.filter((t) => inYear(t) && (segFilter === "전체" || (segFilter === "none" ? !t.seg_id : t.seg_id === segFilter)) && (typeFilter === "전체" || t.acct_type === typeFilter));
+  const shownLedger = txns.filter((t) => inYear(t) && (!t.is_voucher || t.status === "지급완료") && (segFilter === "전체" || (segFilter === "none" ? !t.seg_id : t.seg_id === segFilter)) && (typeFilter === "전체" || t.acct_type === typeFilter));
+  const voucherTxns = txns.filter((t) => t.is_voucher && inYear(t));
+  const V_COLOR: Record<string, { bg: string; color: string }> = {
+    대기: { bg: "#FFF2DE", color: "#B77A16" }, 승인: { bg: "#E0EDFB", color: "#2A6FDB" },
+    반려: { bg: "#FDECEC", color: "#D14343" }, 지급완료: { bg: "#E9F2EC", color: "#3E8E68" },
+  };
 
   if (!canAccess)
     return (
@@ -214,12 +282,14 @@ export default function Finance() {
         <div style={{ display: "inline-flex", background: "rgba(12,15,13,0.05)", borderRadius: 10, padding: 3, flexWrap: "wrap" }}>
           <Seg on={tab === "overview"} onClick={() => setTab("overview")} label="부문 현황" />
           <Seg on={tab === "ledger"} onClick={() => setTab("ledger")} label="거래 내역" />
+          <Seg on={tab === "voucher"} onClick={() => setTab("voucher")} label="지출결의" />
           <Seg on={tab === "statements"} onClick={() => setTab("statements")} label="재무제표" />
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <select value={year} onChange={(e) => setYear(e.target.value)} style={selStyle}>
             {years.map((y) => <option key={y} value={y}>{y === "전체" ? "전체 기간" : y + "년"}</option>)}
           </select>
+          <button onClick={() => setAcctMgr(true)} className="gbtn" style={{ padding: "10px 14px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 10, background: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>계정 관리</button>
           <button onClick={() => newTxn()} className="pbtn" style={{ padding: "10px 16px", border: "none", borderRadius: 10, background: "#0C0F0D", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ 거래 등록</button>
         </div>
       </div>
@@ -314,8 +384,8 @@ export default function Finance() {
                       {t.memo && <span>· {t.memo}</span>}
                     </div>
                   </div>
-                  <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: income ? "#0E7B4E" : t.acct_type === "비용" ? "#D14343" : "#0C0F0D", whiteSpace: "nowrap" }}>
-                    {income ? "+" : t.acct_type === "비용" ? "−" : ""}{fmtWon(t.amount)}
+                  <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: income ? "#0E7B4E" : t.acct_type === "비용" ? "#D14343" : t.acct_type === "분배" ? "#0C9488" : "#0C0F0D", whiteSpace: "nowrap" }}>
+                    {income ? "+" : (t.acct_type === "비용" || t.acct_type === "분배") ? "−" : ""}{fmtWon(t.amount)}
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     {t.attachment && (
@@ -330,6 +400,47 @@ export default function Finance() {
             {!loading && shownLedger.length === 0 && (
               <div style={emptyBox}>해당하는 거래가 없습니다. <b>+ 거래 등록</b>으로 추가하세요.</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===================== 지출결의 ===================== */}
+      {tab === "voucher" && (
+        <div>
+          <div className="g-toolbar" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
+            <div style={{ fontSize: 13.5, color: "#5A5C65" }}>지출 전 결의서를 등록하고 <b>승인 → 지급완료</b> 시 재무제표에 반영됩니다.</div>
+            <div style={{ flex: 1 }} />
+            <button onClick={newVoucher} className="pbtn" style={{ padding: "10px 16px", border: "none", borderRadius: 10, background: "#0C0F0D", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>+ 지출결의 등록</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {voucherTxns.map((t) => {
+              const st = V_COLOR[t.status || "대기"] || V_COLOR["대기"];
+              return (
+                <div key={t.id} style={{ background: "#fff", border: "1px solid rgba(12,15,13,0.08)", borderRadius: 12, padding: "14px 16px", borderLeft: `4px solid ${st.color}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6, background: st.bg, color: st.color }}>{t.status || "대기"}</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 700 }}>{t.account}{t.partner ? <span style={{ color: "#84908A", fontWeight: 500 }}> · {t.partner}</span> : null}</span>
+                    <span className="mono" style={{ marginLeft: "auto", fontSize: 15, fontWeight: 700, color: "#D14343" }}>{fmtWon(t.amount)}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#9AA29C", marginTop: 6, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <span className="mono">{fmtD(t.tx_date)}</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: segColor(t.seg_id) }} />{segName(t.seg_id)}</span>
+                    {t.requester && <span>· 신청 {t.requester}</span>}
+                    {t.memo && <span>· {t.memo}</span>}
+                  </div>
+                  <div style={{ marginTop: 11, display: "flex", gap: 7, flexWrap: "wrap" }}>
+                    {(t.status === "대기" || !t.status) && <button onClick={() => setVoucherStatus(t, "승인", "결의를 승인했습니다")} className="pbtn" style={vBtnP}>승인</button>}
+                    {t.status === "승인" && <button onClick={() => setVoucherStatus(t, "지급완료", "지급완료 — 재무제표에 반영됩니다")} className="pbtn" style={{ ...vBtnP, background: "linear-gradient(110deg,#0E7B4E,#46D08A)" }}>지급완료</button>}
+                    {t.status !== "반려" && t.status !== "지급완료" && <button onClick={() => setVoucherStatus(t, "반려", "반려했습니다")} className="gbtn" style={vBtn}>반려</button>}
+                    {t.status === "반려" && <button onClick={() => setVoucherStatus(t, "대기", "대기로 되돌렸습니다")} className="gbtn" style={vBtn}>되돌리기</button>}
+                    {t.attachment && <button onClick={() => downloadAttachment(attFrom(t.attachment_name || "첨부", t.attachment)).then((r) => !r.ok && toast("다운로드 실패"))} className="gbtn" style={vBtn}>📎 증빙</button>}
+                    <button onClick={() => editTxn(t)} className="gbtn" style={vBtn}>✎ 수정</button>
+                    <button onClick={() => deleteTxn(t)} className="gbtn" style={{ ...vBtn, color: "#C4553E", borderColor: "rgba(196,85,62,0.3)" }}>삭제</button>
+                  </div>
+                </div>
+              );
+            })}
+            {!loading && voucherTxns.length === 0 && <div style={emptyBox}>등록된 지출결의가 없습니다. <b>+ 지출결의 등록</b>으로 지출 예정 비용을 올리세요.</div>}
           </div>
         </div>
       )}
@@ -357,6 +468,37 @@ export default function Finance() {
               </div>
             </div>
           </Card>
+
+          <div style={{ gridColumn: "1 / -1" }}>
+            <Card title="이익 분배" sub="당기순이익을 성과급·배당 등으로 분배 기록">
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+                <MiniStat label="당기순이익" value={fmtWon(netProfit)} color="#0E7B4E" />
+                <MiniStat label="분배 합계" value={fmtWon(totalDist)} color="#0C9488" />
+                <MiniStat label="미분배 이익" value={fmtWon(undistributed)} color={undistributed >= 0 ? "#2A6FDB" : "#D14343"} />
+                <button onClick={() => newTxn({ acct_type: "분배", account: "이익분배", amount: String(Math.max(0, undistributed)) })} className="pbtn" style={{ marginLeft: "auto", padding: "10px 16px", border: "none", borderRadius: 10, background: "linear-gradient(110deg,#0C9488,#37C0B0)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>+ 이익 분배 기록</button>
+              </div>
+              {byAccount("분배").length === 0 ? (
+                <div style={{ fontSize: 13, color: "#84908A", padding: "4px 0" }}>아직 분배 내역이 없습니다. <b>+ 이익 분배 기록</b>으로 성과급·배당금·사내유보 등을 기록하세요.</div>
+              ) : (
+                <div className="g-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0C9488", marginBottom: 6 }}>항목별 분배</div>
+                    {byAccount("분배").map(([acct, amt]) => <Row key={acct} label={acct} value={fmtWon(amt)} />)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0C9488", marginBottom: 6 }}>사업부문별 분배</div>
+                    {distBySeg.length === 0 && <div style={{ fontSize: 12.5, color: "#9AA29C" }}>공통/전사 분배만 있습니다</div>}
+                    {distBySeg.map(({ sg, amt }) => (
+                      <div key={sg.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0" }}>
+                        <span style={{ fontSize: 13.5, display: "inline-flex", alignItems: "center", gap: 7 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: sg.color }} />{sg.name}</span>
+                        <span className="mono" style={{ fontSize: 13.5, fontWeight: 600, color: "#0C9488" }}>{fmtWon(amt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
 
           <div style={{ gridColumn: "1 / -1" }}>
             <Card title="사업 부문별 손익">
@@ -398,7 +540,7 @@ export default function Finance() {
         {editor && (
           <div>
             <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(12,15,13,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <h2 style={{ fontSize: 19, fontWeight: 700 }}>{editor.id ? "거래 수정" : "거래 등록"}</h2>
+              <h2 style={{ fontSize: 19, fontWeight: 700 }}>{editor.voucher ? (editor.id ? "지출결의 수정" : "지출결의 등록") : (editor.id ? "거래 수정" : "거래 등록")}</h2>
               <span onClick={() => setEditor(null)} style={{ cursor: "pointer", fontSize: 22, color: "#84908A", lineHeight: 1 }}>×</span>
             </div>
             <div className="m-pad-lg" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, maxHeight: "68vh", overflowY: "auto" }}>
@@ -413,7 +555,7 @@ export default function Finance() {
               <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div><label style={lbl}>계정과목</label>
                   <input list="acct-list" value={editor.account} onChange={(e) => setEditor({ ...editor, account: e.target.value })} placeholder="선택 또는 직접 입력" style={fld} />
-                  <datalist id="acct-list">{ACCOUNTS[editor.acct_type].map((a) => <option key={a} value={a} />)}</datalist>
+                  <datalist id="acct-list">{acctOptions(editor.acct_type, editor.seg_id).map((a) => <option key={a} value={a} />)}</datalist>
                 </div>
                 <div><label style={lbl}>사업 부문</label>
                   <select value={editor.seg_id ?? "none"} onChange={(e) => setEditor({ ...editor, seg_id: e.target.value === "none" ? null : e.target.value })} style={fld}>
@@ -423,17 +565,29 @@ export default function Finance() {
                 </div>
               </div>
               <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div><label style={lbl}>거래처 <span style={{ color: "#84908A", fontWeight: 500 }}>(선택)</span></label><input value={editor.partner} onChange={(e) => setEditor({ ...editor, partner: e.target.value })} placeholder="예: 메디팜 코리아" style={fld} /></div>
+                <div><label style={lbl}>거래처 <span style={{ color: "#84908A", fontWeight: 500 }}>(거래처 관리에서 선택)</span></label>
+                  <input list="partner-list" value={editor.partner} onChange={(e) => setEditor({ ...editor, partner: e.target.value })} placeholder="거래처 선택 또는 입력" style={fld} />
+                  <datalist id="partner-list">{partnerNames.map((n) => <option key={n} value={n} />)}</datalist>
+                </div>
                 <div><label style={lbl}>금액 (원)</label><input inputMode="numeric" value={editor.amount ? toNum(editor.amount).toLocaleString("ko-KR") : ""} onChange={(e) => setEditor({ ...editor, amount: e.target.value })} placeholder="0" style={{ ...fld, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600 }} /></div>
               </div>
+              {editor.voucher && (
+                <div><label style={lbl}>신청자</label><input value={editor.requester} onChange={(e) => setEditor({ ...editor, requester: e.target.value })} placeholder="신청자 이름" style={fld} /></div>
+              )}
               <div><label style={lbl}>메모 <span style={{ color: "#84908A", fontWeight: 500 }}>(선택)</span></label><input value={editor.memo} onChange={(e) => setEditor({ ...editor, memo: e.target.value })} placeholder="적요" style={fld} /></div>
               <div>
-                <label style={lbl}>증빙 첨부 <span style={{ color: "#84908A", fontWeight: 500 }}>(세금계산서·영수증 등)</span></label>
+                <label style={lbl}>증빙 첨부 <span style={{ color: "#84908A", fontWeight: 500 }}>(세금계산서·영수증 등 · 파일관리에도 함께 저장)</span></label>
                 <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <button type="button" onClick={() => fileRef.current?.click()} className="gbtn" style={{ padding: "9px 14px", border: "1.5px solid rgba(12,15,13,0.14)", borderRadius: 9, background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>파일 선택</button>
                   <span style={{ fontSize: 13, color: "#5A5C65", wordBreak: "break-all" }}>{editor.file ? editor.file.name : editor.attachment_name || "선택된 파일 없음"}</span>
-                  <input ref={fileRef} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setEditor({ ...editor, file: f }); e.target.value = ""; }} />
+                  <input ref={fileRef} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setEditor({ ...editor, file: f, saveName: editor.saveName || f.name.replace(/\.[^.]+$/, "") }); e.target.value = ""; }} />
                 </div>
+                {editor.file && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={lbl}>저장 파일명 <span style={{ color: "#84908A", fontWeight: 500 }}>(파일관리에 표시될 이름)</span></label>
+                    <input value={editor.saveName} onChange={(e) => setEditor({ ...editor, saveName: e.target.value })} placeholder="예: 2026-09 임차료 세금계산서" style={fld} />
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ padding: "14px 24px", borderTop: "1px solid rgba(12,15,13,0.08)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -442,6 +596,57 @@ export default function Finance() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* ===================== 계정 관리 모달 ===================== */}
+      <Modal open={acctMgr} onClose={() => setAcctMgr(false)} width={560} padded={false}>
+        <div>
+          <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(12,15,13,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <h2 style={{ fontSize: 19, fontWeight: 700 }}>계정과목 관리</h2>
+            <span onClick={() => setAcctMgr(false)} style={{ cursor: "pointer", fontSize: 22, color: "#84908A", lineHeight: 1 }}>×</span>
+          </div>
+          <div className="m-pad-lg" style={{ padding: "20px 24px", maxHeight: "70vh", overflowY: "auto" }}>
+            {/* 추가 폼 */}
+            <div style={{ background: "#F7FAF8", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 12, padding: 16, marginBottom: 18 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#4A4C55", marginBottom: 10 }}>새 계정과목 등록</div>
+              <div className="g-form2" style={{ display: "grid", gridTemplateColumns: "0.8fr 1.4fr 1fr", gap: 10 }}>
+                <select value={newAcct.acct_type} onChange={(e) => setNewAcct({ ...newAcct, acct_type: e.target.value as AcctType })} style={fld}>
+                  {ACCT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input value={newAcct.name} onChange={(e) => setNewAcct({ ...newAcct, name: e.target.value })} placeholder="계정과목명 (예: 임상시험비)" onKeyDown={(e) => e.key === "Enter" && addAccount()} style={fld} />
+                <select value={newAcct.seg_id ?? "none"} onChange={(e) => setNewAcct({ ...newAcct, seg_id: e.target.value === "none" ? null : e.target.value })} style={fld}>
+                  <option value="none">공통</option>
+                  {segments.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <button onClick={addAccount} className="pbtn" style={{ marginTop: 10, padding: "9px 18px", border: "none", borderRadius: 9, background: "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>+ 추가</button>
+            </div>
+            {/* 등록된 계정 목록 */}
+            {ACCT_TYPES.map((t) => {
+              const list = accounts.filter((a) => a.acct_type === t);
+              if (list.length === 0) return null;
+              const tc = TYPE_COLOR[t];
+              return (
+                <div key={t} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: tc.color, marginBottom: 6 }}>{t}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {list.map((a) => (
+                      <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "1px solid rgba(12,15,13,0.08)", borderRadius: 9 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{a.name}</span>
+                        <span style={{ fontSize: 12, color: "#84908A" }}>{a.seg_id ? segName(a.seg_id) : "공통"}</span>
+                        <button onClick={() => removeAccount(a)} className="gbtn" style={{ marginLeft: "auto", width: 28, height: 28, border: "1px solid rgba(196,85,62,0.3)", borderRadius: 7, background: "#fff", color: "#C4553E", fontSize: 13, cursor: "pointer", lineHeight: 1 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {accounts.length === 0 && <div style={{ fontSize: 13, color: "#84908A", padding: "8px 0" }}>등록된 사용자 계정과목이 없습니다. 위에서 사업부문별 비용 계정 등을 추가하세요. (기본 계정과목은 거래 등록 시 그대로 제공됩니다.)</div>}
+          </div>
+          <div style={{ padding: "14px 24px", borderTop: "1px solid rgba(12,15,13,0.08)", display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={() => setAcctMgr(false)} className="pbtn" style={{ padding: "11px 24px", border: "none", borderRadius: 9, background: "#0C0F0D", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>완료</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
@@ -470,6 +675,14 @@ function Card({ title, sub, children }: { title: string; sub?: string; children:
     </div>
   );
 }
+function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ background: "#F7FAF8", border: "1px solid rgba(12,15,13,0.06)", borderRadius: 12, padding: "10px 16px", minWidth: 120 }}>
+      <div style={{ fontSize: 11.5, color: "#84908A" }}>{label}</div>
+      <div className="mono" style={{ fontSize: 17, fontWeight: 700, color, marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
 function Row({ label, value, bold, color }: { label: string; value: string; bold?: boolean; color?: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0" }}>
@@ -494,4 +707,6 @@ function StmtSection({ title, rows, total, color }: { title: string; rows: [stri
 
 const selStyle: CSSProperties = { padding: "9px 12px", border: "1.5px solid rgba(12,15,13,0.12)", borderRadius: 9, fontSize: 13.5, background: "#fff", fontWeight: 600 };
 const iconBtn: CSSProperties = { width: 32, height: 32, border: "1px solid rgba(12,15,13,0.14)", borderRadius: 8, background: "#fff", color: "#5A5C65", fontSize: 13, cursor: "pointer", lineHeight: 1 };
+const vBtn: CSSProperties = { padding: "7px 13px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 8, background: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: "#4A4C55" };
+const vBtnP: CSSProperties = { padding: "7px 14px", border: "none", borderRadius: 8, background: "#2A6FDB", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" };
 const emptyBox: CSSProperties = { padding: "44px 16px", textAlign: "center", color: "#9AA29C", fontSize: 14, background: "#fff", border: "1px solid rgba(12,15,13,0.07)", borderRadius: 14 };

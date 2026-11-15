@@ -8,6 +8,7 @@
 import type {
   Segment,
   FinTxn,
+  FinAccount,
   Notice,
   TaskFull,
   Conversation,
@@ -75,6 +76,15 @@ export const demoFinTxns: FinTxn[] = [
   _fx("t11", -20, null, "자산", "매출채권", "", 180000000),
   _fx("t12", -20, null, "부채", "단기차입금", "", 150000000),
   _fx("t13", -20, null, "자본", "자본금", "", 300000000),
+  _fx("t14", -1, "wholesale", "분배", "성과급", "영업팀", 12000000, "분기 성과 배분"),
+  _fx("t15", -1, null, "분배", "배당금", "주주", 30000000, "이익 배당"),
+];
+
+export const demoFinAccounts: FinAccount[] = [
+  { id: "a1", acct_type: "비용", name: "임상시험비", seg_id: "pharmexp", sort: 0, created_at: "" },
+  { id: "a2", acct_type: "비용", name: "인허가수수료", seg_id: "deviceexp", sort: 1, created_at: "" },
+  { id: "a3", acct_type: "비용", name: "물류/운송비", seg_id: null, sort: 2, created_at: "" },
+  { id: "a4", acct_type: "분배", name: "사내유보", seg_id: null, sort: 3, created_at: "" },
 ];
 
 export const demoContractTypes = [

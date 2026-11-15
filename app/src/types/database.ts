@@ -31,8 +31,16 @@ export interface Segment {
   created_at: string;
 }
 
-/** 재무 거래/장부 (ERP). 사업부문·계정유형별 수익·비용·자산·부채·자본 기록. */
-export type AcctType = "수익" | "비용" | "자산" | "부채" | "자본";
+/** 재무 거래/장부 (ERP). 사업부문·계정유형별 수익·비용·자산·부채·자본·이익분배 기록. */
+export type AcctType = "수익" | "비용" | "자산" | "부채" | "자본" | "분배";
+export interface FinAccount {
+  id: string;
+  acct_type: AcctType;
+  name: string;
+  seg_id: string | null;
+  sort: number;
+  created_at: string;
+}
 export interface FinTxn {
   id: string;
   tx_date: string;
@@ -44,6 +52,9 @@ export interface FinTxn {
   memo: string;
   attachment: string | null;
   attachment_name: string;
+  is_voucher?: boolean;
+  status?: string;
+  requester?: string;
   created_by: string;
   created_at: string;
 }

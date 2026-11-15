@@ -76,6 +76,9 @@
   .g-2col {
     grid-template-columns: 1fr !important;
   }
+  .g-2col > *, .g-stats > * {
+    min-width: 0;
+  }
   .g-schedule {
     grid-template-columns: 1fr !important;
   }
