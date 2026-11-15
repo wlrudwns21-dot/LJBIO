@@ -189,13 +189,33 @@ export const demoLeaves: Leave[] = [
   { id: "5", name: "박지원", dept: "RA", init: "박", avatar_bg: "#0E7B4E", type: "출장", range: "7/29 ~ 7/30", days: "2일", status: "approved", created_at: "" },
 ];
 
+// 데모 일정은 오늘 기준으로 생성 — 날짜가 바뀌어도 항상 이번 달/다가오는 일정으로 표시됩니다.
+const _MON_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const _mkEvent = (
+  id: string,
+  title: string,
+  type: string,
+  dayOffset: number,
+  time: string,
+): CalendarEvent & { day: string; mon: string } => {
+  const base = new Date();
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + dayOffset);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return {
+    id, title, type,
+    event_date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+    day: p(d.getDate()),
+    mon: _MON_ABBR[d.getMonth()],
+    time, created_at: "",
+  };
+};
 export const demoEvents: (CalendarEvent & { day: string; mon: string })[] = [
-  { id: "1", title: "중국 파트너사 화상회의", type: "회의", event_date: "2026-07-11", day: "11", mon: "JUL", time: "오후 3:00", created_at: "" },
-  { id: "2", title: "태국 필러 선적 마감", type: "마감", event_date: "2026-07-14", day: "14", mon: "JUL", time: "종일", created_at: "" },
-  { id: "3", title: "전자결재 시스템 점검", type: "점검", event_date: "2026-07-15", day: "15", mon: "JUL", time: "오전 2:00", created_at: "" },
-  { id: "4", title: "일본 출장 (최민수 팀장)", type: "출장", event_date: "2026-07-18", day: "18", mon: "JUL", time: "3일간", created_at: "" },
-  { id: "5", title: "NMPA 본심사 자료 제출", type: "제출", event_date: "2026-07-22", day: "22", mon: "JUL", time: "오후 5:00", created_at: "" },
-  { id: "6", title: "월간 영업 전략 회의", type: "회의", event_date: "2026-07-25", day: "25", mon: "JUL", time: "오전 10:00", created_at: "" },
+  _mkEvent("1", "중국 파트너사 화상회의", "회의", 0, "오후 3:00"),
+  _mkEvent("2", "태국 필러 선적 마감", "마감", 3, "종일"),
+  _mkEvent("3", "전자결재 시스템 점검", "점검", 4, "오전 2:00"),
+  _mkEvent("4", "일본 출장 (최민수 팀장)", "출장", 7, "3일간"),
+  _mkEvent("5", "NMPA 본심사 자료 제출", "제출", 11, "오후 5:00"),
+  _mkEvent("6", "월간 영업 전략 회의", "회의", 14, "오전 10:00"),
 ];
 
 export const demoInquiries: Inquiry[] = [

@@ -51,13 +51,12 @@ export default function Schedule() {
   const [events, setEvents] = useState<CalendarEvent[]>(demoEvents);
   const [editor, setEditor] = useState<Editor | null>(null);
 
-  // Default view = month of the seed data (falls back to now).
-  const seed = demoEvents[0]?.event_date ? new Date(demoEvents[0].event_date) : new Date();
-  const [viewYear, setViewYear] = useState(seed.getFullYear());
-  const [viewMonth, setViewMonth] = useState(seed.getMonth()); // 0-11
-
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+
+  // Default view = 오늘(현재 월) 기준. 날짜가 바뀌면 자동으로 이번 달을 보여줍니다.
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth()); // 0-11
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -204,7 +203,7 @@ export default function Schedule() {
             <button onClick={nextMonth} className="gbtn" style={navBtn}>›</button>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 6 }}>
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ textAlign: "center", fontSize: 12, fontWeight: 600, color: "#84908A", paddingBottom: 6 }}>
               {w}
@@ -216,6 +215,7 @@ export default function Schedule() {
               onClick={() => c.inMonth && openNew(c.dateStr)}
               title={c.inMonth ? "클릭해 일정 추가" : undefined}
               style={{
+                minWidth: 0,
                 minHeight: 82,
                 borderRadius: 10,
                 padding: "7px 8px",

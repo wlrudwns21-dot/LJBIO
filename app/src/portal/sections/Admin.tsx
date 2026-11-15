@@ -921,6 +921,7 @@ export default function Admin() {
             placeholder="새 계약서 유형 이름 (예: 대리점 계약서)"
             style={{
               flex: 1,
+              minWidth: 0,
               padding: "10px 13px",
               border: "1.5px solid rgba(12,15,13,0.12)",
               borderRadius: 9,

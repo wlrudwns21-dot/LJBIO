@@ -96,12 +96,13 @@
   }
   /* chat master-detail: list view by default, full-screen thread when opened */
   .g-chat {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     grid-template-rows: 1fr !important;
     height: calc(100dvh - 118px) !important;
   }
   .g-chat .chat-list {
     border-right: none !important;
+    min-width: 0 !important;
   }
   .g-chat .chat-thread {
     display: none !important;

@@ -29,6 +29,7 @@ export default function Projects() {
   // null = 프로젝트 목록 · "none" = 미분류 업무 · Project = 해당 프로젝트 작업공간
   const [active, setActive] = useState<Project | "none" | null>(null);
   const [tab, setTab] = useState<"tasks" | "docs">("tasks");
+  const [view, setView] = useState<"active" | "done">("active"); // 진행 중 / 완료 보기
   const [editor, setEditor] = useState<Editor | null>(null);
 
   useEffect(() => {
@@ -127,6 +128,14 @@ export default function Projects() {
     void persist(() => supabase.from("projects").delete().eq("id", p.id));
   }
 
+  // 완료(최종 검수 종료) 처리 / 되돌리기 — 완료된 프로젝트는 '완료' 탭에서 따로 봅니다.
+  function setProjectStatus(p: Project, status: Project["status"], msg: string) {
+    setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, status } : x)));
+    setActive((a) => (a && a !== "none" && a.id === p.id ? { ...a, status } : a));
+    toast(msg);
+    void persist(() => supabase.from("projects").update({ status }).eq("id", p.id));
+  }
+
   /* ----------------------------------------------------------- 작업공간 */
   if (active) {
     const isNone = active === "none";
@@ -146,8 +155,11 @@ export default function Projects() {
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <span style={{ width: 12, height: 12, borderRadius: 4, flexShrink: 0, background: proj?.color || "#84908A" }} />
               <div style={{ minWidth: 0 }}>
-                <h2 className="doc-title" style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+                <h2 className="doc-title" style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   {isNone ? "미분류 업무" : proj!.name}
+                  {!isNone && proj!.status === "done" && (
+                    <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: "#E9F2EC", color: "#3E8E68" }}>✓ 완료</span>
+                  )}
                 </h2>
                 {!isNone && proj!.description && (
                   <div style={{ fontSize: 13, color: "#84908A", marginTop: 3 }}>{proj!.description}</div>
@@ -155,7 +167,12 @@ export default function Projects() {
               </div>
             </div>
             {!isNone && (
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <div className="g-toolbar" style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+                {proj!.status === "done" ? (
+                  <button onClick={() => setProjectStatus(proj!, "active", "진행 중으로 되돌렸습니다")} className="gbtn" style={{ padding: "8px 13px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 8, background: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>↩ 진행중으로</button>
+                ) : (
+                  <button onClick={() => setProjectStatus(proj!, "done", "완료 처리했습니다 · '완료' 탭에서 볼 수 있어요")} className="pbtn" style={{ padding: "8px 14px", border: "none", borderRadius: 8, background: "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>✓ 완료 처리</button>
+                )}
                 <button onClick={() => editProject(proj!)} className="gbtn" style={{ padding: "8px 13px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 8, background: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>✎ 편집</button>
                 <button onClick={() => deleteProject(proj!)} className="gbtn" style={{ padding: "8px 13px", border: "1px solid rgba(196,85,62,0.3)", borderRadius: 8, background: "#fff", color: "#C4553E", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>🗑 삭제</button>
               </div>
@@ -182,11 +199,17 @@ export default function Projects() {
   }
 
   /* ----------------------------------------------------------- 프로젝트 목록 */
+  const activeProjects = projects.filter((p) => p.status !== "done");
+  const doneProjects = projects.filter((p) => p.status === "done");
+  const shown = view === "done" ? doneProjects : activeProjects;
+
   return (
     <div className="fade" style={{ maxWidth: 1240, margin: "0 auto" }}>
       <div className="g-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
-        <div style={{ fontSize: 13.5, color: "#5A5C65" }}>
-          프로젝트를 선택해 <b>업무 과제</b>와 <b>문서</b>를 관리하세요.
+        {/* 진행 중 / 완료 보기 전환 */}
+        <div style={{ display: "inline-flex", background: "rgba(12,15,13,0.05)", borderRadius: 10, padding: 3 }}>
+          <SegBtn on={view === "active"} onClick={() => setView("active")} label={`진행 중 ${activeProjects.length}`} />
+          <SegBtn on={view === "done"} onClick={() => setView("done")} label={`완료 ${doneProjects.length}`} />
         </div>
         <button onClick={newProject} className="pbtn" style={{ padding: "10px 18px", border: "none", borderRadius: 10, background: "#0C0F0D", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
           + 새 프로젝트
@@ -197,8 +220,9 @@ export default function Projects() {
         <div style={emptyBox}>프로젝트를 불러오는 중…</div>
       ) : (
         <div className="proj-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 14 }}>
-          {projects.map((p) => {
+          {shown.map((p) => {
             const c = counts[p.id] || { tasks: 0, files: 0 };
+            const done = p.status === "done";
             return (
               <div
                 key={p.id}
@@ -207,12 +231,13 @@ export default function Projects() {
                   setTab("tasks");
                 }}
                 className="lift"
-                style={{ position: "relative", cursor: "pointer", background: "#fff", border: "1px solid rgba(12,15,13,0.08)", borderRadius: 16, padding: 18, overflow: "hidden" }}
+                style={{ position: "relative", cursor: "pointer", background: done ? "#F7FAF8" : "#fff", border: "1px solid rgba(12,15,13,0.08)", borderRadius: 16, padding: 18, overflow: "hidden" }}
               >
-                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 5, background: p.color }} />
+                <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 5, background: done ? "#9AA29C" : p.color }} />
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color, flexShrink: 0 }} />
-                  <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.3, flex: 1, minWidth: 0 }}>{p.name}</h3>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: done ? "#9AA29C" : p.color, flexShrink: 0 }} />
+                  <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.3, flex: 1, minWidth: 0, color: done ? "#6A6C75" : "#0C0F0D" }}>{p.name}</h3>
+                  {done && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: "#E9F2EC", color: "#3E8E68", flexShrink: 0 }}>✓ 완료</span>}
                 </div>
                 {p.description && (
                   <div style={{ marginTop: 8, fontSize: 13, color: "#6A6C75", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.description}</div>
@@ -225,27 +250,31 @@ export default function Projects() {
             );
           })}
 
-          {/* 미분류 업무 */}
-          <div
-            onClick={() => {
-              setActive("none");
-              setTab("tasks");
-            }}
-            className="lift"
-            style={{ cursor: "pointer", background: "rgba(12,15,13,0.02)", border: "1.5px dashed rgba(12,15,13,0.16)", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", justifyContent: "center" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: "#84908A", flexShrink: 0 }} />
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#5A5C65" }}>미분류 업무</h3>
+          {/* 미분류 업무 — 진행 중 보기에서만 */}
+          {view === "active" && (
+            <div
+              onClick={() => {
+                setActive("none");
+                setTab("tasks");
+              }}
+              className="lift"
+              style={{ cursor: "pointer", background: "rgba(12,15,13,0.02)", border: "1.5px dashed rgba(12,15,13,0.16)", borderRadius: 16, padding: 18, display: "flex", flexDirection: "column", justifyContent: "center" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: "#84908A", flexShrink: 0 }} />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#5A5C65" }}>미분류 업무</h3>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 12.5, color: "#84908A" }}>
+                프로젝트에 속하지 않은 과제 · <b style={{ color: "#0C0F0D" }}>{unassigned}</b>개
+              </div>
             </div>
-            <div style={{ marginTop: 8, fontSize: 12.5, color: "#84908A" }}>
-              프로젝트에 속하지 않은 과제 · <b style={{ color: "#0C0F0D" }}>{unassigned}</b>개
-            </div>
-          </div>
+          )}
 
-          {projects.length === 0 && (
+          {shown.length === 0 && (
             <div style={{ gridColumn: "1 / -1", ...emptyBox }}>
-              아직 프로젝트가 없습니다. <b>+ 새 프로젝트</b>로 첫 프로젝트를 만들어보세요.
+              {view === "done"
+                ? "완료된 프로젝트가 없습니다. 작업공간에서 ‘✓ 완료 처리’를 하면 여기로 모입니다."
+                : "진행 중인 프로젝트가 없습니다. ‘+ 새 프로젝트’로 시작해보세요."}
             </div>
           )}
         </div>
@@ -253,6 +282,27 @@ export default function Projects() {
 
       <ProjectEditorModal editor={editor} setEditor={setEditor} onSave={saveProject} />
     </div>
+  );
+}
+
+function SegBtn({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "7px 16px",
+        border: "none",
+        borderRadius: 8,
+        background: on ? "#fff" : "transparent",
+        color: on ? "#0C0F0D" : "#84908A",
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: "pointer",
+        boxShadow: on ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
