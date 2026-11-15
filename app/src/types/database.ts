@@ -31,6 +31,23 @@ export interface Segment {
   created_at: string;
 }
 
+/** 재무 거래/장부 (ERP). 사업부문·계정유형별 수익·비용·자산·부채·자본 기록. */
+export type AcctType = "수익" | "비용" | "자산" | "부채" | "자본";
+export interface FinTxn {
+  id: string;
+  tx_date: string;
+  seg_id: string | null;
+  acct_type: AcctType;
+  account: string;
+  partner: string;
+  amount: number;
+  memo: string;
+  attachment: string | null;
+  attachment_name: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface Notice {
   id: string;
   tag: string;

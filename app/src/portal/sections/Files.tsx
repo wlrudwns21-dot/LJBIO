@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { isMaster } from "@/lib/access";
 import { storeUpload, storedValue, attFrom, downloadAttachment } from "@/lib/storage";
-import { useToast, ModalWrap } from "../ui";
+import { useToast, ModalWrap, Modal } from "../ui";
 import { demoFiles, demoSegments, demoMe, demoPartners, demoMembers } from "../data/demo";
 import type { FileRow, Segment } from "@/types/database";
 
@@ -108,6 +108,8 @@ export default function Files() {
   const [segFilter, setSegFilter] = useState<string>("전체");
   const [upload, setUpload] = useState<Upload | null>(null);
   const [secEdit, setSecEdit] = useState<{ id: string; grade: number; allowed: string[] } | null>(null);
+  // 분류(사업부문·태그) 편집
+  const [clsEdit, setClsEdit] = useState<{ id: string; name: string; seg_id: string | null; tag: string } | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -252,6 +254,16 @@ export default function Files() {
     flash("보안등급을 변경했습니다");
     if (isSupabaseConfigured)
       supabase.from("files").update({ grade, allowed }).eq("id", id).then(() => {});
+  }
+
+  function saveCls() {
+    if (!clsEdit) return;
+    const { id, seg_id, tag } = clsEdit;
+    setFiles((prev) => prev.map((x) => (x.id === id ? { ...x, seg_id, tag } : x)));
+    setClsEdit(null);
+    flash("분류를 변경했습니다");
+    if (isSupabaseConfigured)
+      supabase.from("files").update({ seg_id, tag }).eq("id", id).then(() => {});
   }
 
   function remove(f: FileRow) {
@@ -551,6 +563,24 @@ export default function Files() {
                   }}
                 >
                   ⬇
+                </button>
+                <button
+                  onClick={() => setClsEdit({ id: f.id, name: f.name, seg_id: f.seg_id ?? null, tag: f.tag || "" })}
+                  className="gbtn"
+                  title="분류(사업부문) 편집"
+                  style={{
+                    padding: "6px 9px",
+                    border: "1px solid rgba(12,15,13,0.16)",
+                    borderRadius: 8,
+                    background: "#fff",
+                    color: "#5A5C65",
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  🏷
                 </button>
                 {canGrade && (
                   <button
@@ -1057,6 +1087,53 @@ export default function Files() {
           </div>
         </ModalWrap>
       )}
+
+      {/* ============ 분류(사업부문) 편집 모달 ============ */}
+      <Modal open={!!clsEdit} onClose={() => setClsEdit(null)} width={440} padded={false}>
+        {clsEdit && (
+          <div>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(12,15,13,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>분류 편집</h2>
+              <span onClick={() => setClsEdit(null)} style={{ cursor: "pointer", fontSize: 22, color: "#84908A", lineHeight: 1 }}>×</span>
+            </div>
+            <div className="m-pad-lg" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ fontSize: 13, color: "#5A5C65", wordBreak: "break-all" }}>📄 {clsEdit.name}</div>
+              <div>
+                <label style={{ fontSize: 12.5, color: "#4A4C55", fontWeight: 600 }}>사업 부문</label>
+                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {segments.map((sg) => {
+                    const on = clsEdit.seg_id === sg.id;
+                    return (
+                      <button
+                        key={sg.id}
+                        onClick={() => setClsEdit({ ...clsEdit, seg_id: sg.id })}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${on ? sg.color : "rgba(12,15,13,0.14)"}`, background: on ? sg.color : "#fff", color: on ? "#fff" : "#4A4C55" }}
+                      >
+                        <span style={{ width: 9, height: 9, borderRadius: 2, background: on ? "#fff" : sg.color }} />
+                        {sg.name}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setClsEdit({ ...clsEdit, seg_id: null })}
+                    style={{ padding: "8px 13px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${clsEdit.seg_id === null ? "#0C0F0D" : "rgba(12,15,13,0.14)"}`, background: clsEdit.seg_id === null ? "#0C0F0D" : "#fff", color: clsEdit.seg_id === null ? "#fff" : "#4A4C55" }}
+                  >
+                    미분류
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12.5, color: "#4A4C55", fontWeight: 600 }}>태그 <span style={{ color: "#84908A", fontWeight: 500 }}>(선택)</span></label>
+                <input value={clsEdit.tag} onChange={(e) => setClsEdit({ ...clsEdit, tag: e.target.value })} placeholder="예: 2026 재무, 계약" style={{ marginTop: 6, width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1.5px solid rgba(12,15,13,0.12)", borderRadius: 9, fontSize: 14 }} />
+              </div>
+            </div>
+            <div style={{ padding: "14px 24px", borderTop: "1px solid rgba(12,15,13,0.08)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button onClick={() => setClsEdit(null)} className="gbtn" style={{ padding: "11px 20px", border: "1px solid rgba(12,15,13,0.14)", borderRadius: 9, background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>취소</button>
+              <button onClick={saveCls} className="pbtn" style={{ padding: "11px 24px", border: "none", borderRadius: 9, background: "linear-gradient(110deg,#0E7B4E,#46D08A)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>저장</button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

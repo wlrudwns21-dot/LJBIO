@@ -7,6 +7,7 @@
  */
 import type {
   Segment,
+  FinTxn,
   Notice,
   TaskFull,
   Conversation,
@@ -52,6 +53,28 @@ export const demoSegments: Segment[] = [
   { id: "cosmexp", name: "화장품 수출", color: "#D14D8B", orders: 210, revenue: 1875000000, sort: 2, created_at: "" },
   { id: "deviceexp", name: "의료기기 수출", color: "#C6803A", orders: 46, revenue: 2240000000, sort: 3, created_at: "" },
   { id: "itconsult", name: "IT 컨설팅", color: "#7A4DD1", orders: 18, revenue: 640000000, sort: 4, created_at: "" },
+];
+
+const _fx = (id: string, dOff: number, seg: string | null, t: FinTxn["acct_type"], acct: string, partner: string, amount: number, memo = ""): FinTxn => {
+  const base = new Date();
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + dOff);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return { id, tx_date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, seg_id: seg, acct_type: t, account: acct, partner, amount, memo, attachment: null, attachment_name: "", created_by: "지경준", created_at: "" };
+};
+export const demoFinTxns: FinTxn[] = [
+  _fx("t1", -2, "wholesale", "수익", "상품매출", "메디팜 코리아", 128000000, "9월 정기 납품"),
+  _fx("t2", -5, "pharmexp", "수익", "용역매출", "Shanghai HealthLink", 96500000, "중국 수출 1차"),
+  _fx("t3", -9, "cosmexp", "수익", "상품매출", "그린바이오", 54200000),
+  _fx("t4", -12, "deviceexp", "수익", "상품매출", "태국 바이어", 210000000, "필러 선적"),
+  _fx("t5", -3, "wholesale", "비용", "매출원가", "제조사 A", 74000000, "상품 매입"),
+  _fx("t6", -6, null, "비용", "급여", "", 58000000, "9월 급여"),
+  _fx("t7", -7, null, "비용", "임차료", "강남빌딩", 6800000),
+  _fx("t8", -10, "pharmexp", "비용", "지급수수료", "관세사", 3200000, "통관 수수료"),
+  _fx("t9", -1, null, "비용", "광고선전비", "마케팅대행사", 4500000),
+  _fx("t10", -20, null, "자산", "보통예금", "", 420000000, "운영 자금"),
+  _fx("t11", -20, null, "자산", "매출채권", "", 180000000),
+  _fx("t12", -20, null, "부채", "단기차입금", "", 150000000),
+  _fx("t13", -20, null, "자본", "자본금", "", 300000000),
 ];
 
 export const demoContractTypes = [
